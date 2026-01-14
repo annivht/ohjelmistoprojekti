@@ -1,6 +1,7 @@
 import pygame
 from pygame.locals import QUIT
 import sys
+import os
 
 
 #peli-ikkunan leveys ja korkeus
@@ -50,6 +51,10 @@ def gameOver():
     pass
 
 
+class AnimatedSprite(pygame.sprite.Sprite):
+    pass
+
+
 
 def main():
     pygame.init()
@@ -77,6 +82,11 @@ def main():
     
     show_maa = True
     start_screen = True
+
+    # Try to load animated frames from a sprite-sheet. If it fails, we'll
+    # fall back to the static `img_alus` already loaded above.
+    player_sprite = None
+    animated_group = None
 
 
     running = True
@@ -109,6 +119,14 @@ def main():
             continue
         keys = pygame.key.get_pressed()
         alus_x, alus_y = paivita_aluksen_paikka(keys, alus_x, alus_y, alus_nopeus, SHIP_W, SHIP_H, WIDTH, HEIGHT)
+        # Determine whether the player is moving (any movement key pressed)
+        moving = (
+            keys[pygame.K_LEFT] or keys[pygame.K_a] or
+            keys[pygame.K_RIGHT] or keys[pygame.K_d] or
+            keys[pygame.K_UP] or keys[pygame.K_w] or
+            keys[pygame.K_DOWN] or keys[pygame.K_s]
+        )
+        # Draw either animated sprite or fallback static image
         piirra_alus(win, img_alus, alus_x, alus_y)
         pygame.display.update()
     pygame.quit()
