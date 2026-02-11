@@ -1,10 +1,9 @@
-# Pohjat otettu: https://www.youtube.com/watch?v=2iyx8_elcYg
-# Avaruus-spriteja löytyy: https://www.freepik.com/free-photos-vectors/space-sprite#uuid=689f2d8e-f000-4f6c-be3f-d277040f2102
-import pygame
+import sys
 import os
+import pygame
 import random
-from player import Player
-
+sys.path.append(os.path.dirname(__file__))
+from PLAYER_LUOKAT.Player import Player
 
 
 currentWorkDir = os.getcwd()
@@ -105,6 +104,7 @@ while run:
     # Keskitetään kamera pelaajaan (kameran sijainti maailmassa)
     camera_x = player.rect.centerx - X // 2
     camera_y = player.rect.centery - Y // 2
+    
     # Rajoita kamera taustan reunoihin
     camera_x = max(0, min(camera_x, tausta_leveys - X))
     camera_y = max(0, min(camera_y, tausta_korkeus - Y))

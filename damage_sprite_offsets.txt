@@ -1,0 +1,9 @@
+Damage_1.png:-1,-1
+Damage_2.png:-1,-1
+Damage_3.png:-1,-1
+Damage_4.png:-1,-1
+Damage_5.png:-1,2
+Damage_6.png:-1,11
+Damage_7.png:-1,15
+Damage_8.png:-1,25
+Damage_9.png:-1,31
