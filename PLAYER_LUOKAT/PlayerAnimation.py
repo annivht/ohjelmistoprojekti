@@ -17,27 +17,6 @@ class PlayerAnimation:
             frames.append(pygame.transform.scale(img, (w, h)))
         return frames
 
-    @staticmethod
-    def load_damage_offsets(offset_file='damage_sprite_offsets.txt'):
-        offsets = {}
-        try:
-            with open(offset_file, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if ':' in line:
-                        name, val = line.strip().split(':')
-                        try:
-                            if ',' in val:
-                                x_str, y_str = val.split(',')
-                                x = int(x_str)
-                                y = int(y_str)
-                                offsets[name] = (x, y)
-                            else:
-                                offsets[name] = (int(val), 0)
-                        except ValueError:
-                            print(f"[PlayerAnimation] Offset-arvo virheellinen: {val} (rivi: {line.strip()})")
-        except Exception as e:
-            print(f"[PlayerAnimation] Offset-tiedoston luku epäonnistui: {e}")
-        return offsets
 
     def scale_frames(self, frames):
         if not frames:

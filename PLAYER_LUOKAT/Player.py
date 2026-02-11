@@ -12,7 +12,7 @@ class Player(pygame.sprite.Sprite):
         self.input = PlayerInput()
         self.animation = PlayerAnimation(scale_factor)
         self.weapons = PlayerWeapons(scale_factor)
-        self.attack_offset_distance = 28
+        self.attack_offset_distance = 4.5 # asetettu 0.5 scalefactorille RocketGame.py(scale_factor=0.5) 
 
         liike_frames = frames if frames else [pygame.Surface((32, 32), pygame.SRCALPHA)]
         self.animaatio = {
@@ -59,26 +59,24 @@ class Player(pygame.sprite.Sprite):
         self.attack_anim_timer = 0
         self.attack_anim_speed = 80
 
-        # Hit animation
+        # Osuma-animaatio
         self.hit_anim_timer = 0
         self.hit_anim_duration = 200
         self.hit_flash_color = (255, 80, 80)
 
-        # Damage sprite animation
+        # Vahinko-animaatio
         self.damage_sprites = []
         self.damage_sprite_names = []
         damage_dir = os.path.join(project_root, 'alukset', 'alus', 'Corvette', 'Damage')
         damage_files = sorted([f for f in os.listdir(damage_dir) if f.lower().endswith('.png')])
         for fname in damage_files:
             path = os.path.join(damage_dir, fname)
-            try:
-                img = pygame.image.load(path).convert_alpha()
-                w = max(1, int(img.get_width() * self.scale_factor))
-                h = max(1, int(img.get_height() * self.scale_factor))
-                self.damage_sprites.append(pygame.transform.scale(img, (w, h)))
-                self.damage_sprite_names.append(fname)
-            except Exception as e:
-                print(f"[Player] Damage-kuvan lataus epäonnistui: {path} ({e})")
+            img = pygame.image.load(path).convert_alpha()
+            w = max(1, int(img.get_width() * self.scale_factor))
+            h = max(1, int(img.get_height() * self.scale_factor))
+            self.damage_sprites.append(pygame.transform.scale(img, (w, h)))
+            self.damage_sprite_names.append(fname)
+
 
     def update(self, dt):
         self.input.update()

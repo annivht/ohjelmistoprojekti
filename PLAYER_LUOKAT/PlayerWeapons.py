@@ -19,7 +19,7 @@ class PlayerWeapons:
     def shoot(self, pos, angle):
         if self.shoot_timer <= 0:
             self.shoot_timer = self.shoot_cooldown
-            side_offset = 15
+            side_offset = 15 # asetettu 0.5 scalefactorille. RocketGame.py(scale_factor=0.5) -> 10px
             forward_offset = 20
             rad = math.radians(angle)
             perp_rad = rad + math.pi/2

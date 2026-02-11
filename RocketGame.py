@@ -77,7 +77,7 @@ if os.path.isdir(boost_dir):
 player_start_x = tausta_leveys // 2
 player_start_y = tausta_korkeus // 2
 player_scale_multiplier = 10
-player_scale_factor = 3  # Skaalaa pelaaja puoleen kokoon
+player_scale_factor = 0.5  # Skaalaa pelaaja puoleen kokoon
 player = Player(player_scale_factor, frames, player_start_x, player_start_y, boost_frames=boost_frames)
 
 # Kello frameratea ja animaatiota varten
