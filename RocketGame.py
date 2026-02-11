@@ -4,6 +4,7 @@ import pygame
 import random
 #from player import Player
 from enemy import StraightEnemy, CircleEnemy
+from boss_enemy import BossEnemy
 from points import Points
 sys.path.append(os.path.dirname(__file__))
 from PLAYER_LUOKAT.Player import Player
@@ -69,6 +70,12 @@ enemy_imgs = [
         key=lambda name: int(os.path.splitext(name)[0])  # "1.png" -> 1
     )
 ]
+# BOSS kuva
+boss_image = pygame.transform.scale(
+    pygame.image.load(os.path.join(viholliset_path, "12.png")).convert_alpha(),
+    (320, 320)  # iso boss
+)
+
 
 world_rect = pygame.Rect(0, 0, tausta_leveys, tausta_korkeus)
 
@@ -133,6 +140,11 @@ camera_x = 0
 camera_y = 0
 run = True
 pause = False
+
+# BOSS ilmestyy pisteiden mukaan
+boss_spawned = False
+BOSS_TRIGGER_SCORE = 2
+
 while run:
     # Tapahtumien käsittely
     for event in pygame.event.get():
@@ -173,13 +185,37 @@ while run:
     for bullet in list(player.weapons.bullets):
         for enemy in list(enemies):
             if bullet.rect.colliderect(enemy.rect):
-                # Ammuksen osuessa viholliseen, tuhotaan vihollinen
+
+                # Poista ammus
                 if bullet in player.weapons.bullets:
                     player.weapons.bullets.remove(bullet)
-                if enemy in enemies:
+
+                # Boss kestää useita osumia
+                if isinstance(enemy, BossEnemy):
+                    died = enemy.take_hit(1)
+                    if died:
+                        enemies.remove(enemy)
+                        pistejarjestelma.lisaa_piste(5)  # boss-bonus
+                else:
+                    # Normaali vihollinen kuolee heti
                     enemies.remove(enemy)
-                    pistejarjestelma.lisaa_piste(1)  # Lisää pisteet vihollisen tuhosta
-                break  # Siirry seuraavaan ammuskseen kun tämä osui
+                    pistejarjestelma.lisaa_piste(1)
+
+                break  # Siirry seuraavaan ammukseen
+
+    # Bossen ilmestyminen
+    if (not boss_spawned) and pistejarjestelma.hae_pisteet() >= BOSS_TRIGGER_SCORE:
+        boss_spawned = True
+
+        boss = BossEnemy(
+            boss_image,
+            world_rect,
+            hp=12,
+            enter_speed=280,
+            move_speed=320
+    )
+
+        enemies.append(boss)   
 
     # Tarkista osumat vihollisten ja pelaajan välillä
     if enemy_hit_cooldown <= 0:
