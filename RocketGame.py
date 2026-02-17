@@ -9,8 +9,8 @@ import sys
 import os
 import pygame
 import random
-import math
-from EnemyAI import StraightEnemy, CircleEnemy
+#from player import Player
+from enemy import StraightEnemy, CircleEnemy
 from boss_enemy import BossEnemy
 from points import Points
 sys.path.append(os.path.dirname(__file__))
@@ -103,11 +103,6 @@ boss_image = pygame.transform.scale(
     pygame.image.load(os.path.join(viholliset_path, "12.png")).convert_alpha(),
     (320, 320)  # iso boss
 )
-
-# Load Ship sprites (Ship2 by default) and exhaust/shot frames
-ss = SpriteSettings(base_path=os.path.join(os.path.dirname(__file__), 'enemy-sprite'), ship='Ship2')
-ss.load_all()
-
 
 
 world_rect = pygame.Rect(0, 0, tausta_leveys, tausta_korkeus)
@@ -276,6 +271,11 @@ pause = False
 boss_spawned = False
 BOSS_TRIGGER_SCORE = 2
 
+
+# BOSS ilmestyy pisteiden mukaan
+boss_spawned = False
+BOSS_TRIGGER_SCORE = 2
+
 while run:
     # Tapahtumien käsittely
     for event in pygame.event.get():
@@ -383,31 +383,23 @@ while run:
     for bullet in list(player.weapons.bullets):
         for enemy in list(enemies):
             if bullet.rect.colliderect(enemy.rect):
-                # Remove player's bullet
+
+                # Poista ammus
                 if bullet in player.weapons.bullets:
                     player.weapons.bullets.remove(bullet)
 
-                # Spawn explosion animation at enemy position (use shot_frames explode if available)
-                explode_list = shot_frames.get('explode') if isinstance(shot_frames, dict) else None
-                if explode_list:
-                    from EnemyHelpers import EnemyBullet
-                    exp = EnemyBullet(pygame.Vector2(enemy.rect.center), pygame.Vector2(0, 0),
-                                      start_frames=None, flight_frames=None, explode_frames=explode_list, speed=0)
-                    exp.explode()
-                    enemy_bullets.append(exp)
-
-                # Boss takes multiple hits
+                # Boss kestää useita osumia
                 if isinstance(enemy, BossEnemy):
                     died = enemy.take_hit(1)
                     if died:
                         enemies.remove(enemy)
                         pistejarjestelma.lisaa_piste(5)  # boss-bonus
                 else:
-                    # Normal enemy dies immediately
+                    # Normaali vihollinen kuolee heti
                     enemies.remove(enemy)
                     pistejarjestelma.lisaa_piste(1)
 
-                break  # move to next player bullet
+                break  # Siirry seuraavaan ammukseen
 
     # Bossen ilmestyminen
     if (not boss_spawned) and pistejarjestelma.hae_pisteet() >= BOSS_TRIGGER_SCORE:
@@ -416,14 +408,12 @@ while run:
         boss = BossEnemy(
             boss_image,
             world_rect,
-            hp=100,
+            hp=12,
             enter_speed=280,
             move_speed=320
     )
 
-        # give boss shot frames so it can spawn animated/homing bullets
-        boss.shots = shot_frames
-        enemies.append(boss)
+        enemies.append(boss)   
 
     # Tarkista osumat vihollisten ja pelaajan välillä
     if enemy_hit_cooldown <= 0:
