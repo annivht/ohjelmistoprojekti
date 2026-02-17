@@ -141,7 +141,7 @@ e1.exhaust_normal = exhaust_normal
 e1.shots = shot_frames
 enemies.append(e1)
 
-e2 = CircleEnemy(img1, tausta_leveys // 2 + 300, tausta_korkeus // 2, radius=180, angular_speed=2.2)
+e2 = CircleEnemy(img1, tausta_leveys // 2 + 300, tausta_korkeus // 2, radius=180, angular_speed=1)
 e2.exhaust_turbo = exhaust_turbo
 e2.exhaust_normal = exhaust_normal
 e2.shots = shot_frames
@@ -156,7 +156,46 @@ for _ in range(len(planeetat)):
 
 # Initialize planets helper (loads sprite and rotation state)
 try:
-    planets.init_planet(os.path.dirname(__file__), filename=None, height=96, rot_speed_deg=36.0)
+    # Select one large HD planet randomly from images/hd-planet and load it into planets module
+    hd_dir = os.path.join(os.path.dirname(__file__), 'images', 'hd-planet')
+    planet_height = max(800, int(Y * 1.4))
+    if os.path.isdir(hd_dir):
+        files = [f for f in os.listdir(hd_dir) if f.lower().endswith('.png')]
+        if files:
+            choice = random.choice(files)
+            path = os.path.join(hd_dir, choice)
+            try:
+                surf = pygame.image.load(path).convert_alpha()
+                # crop transparent padding so rotation pivots around the visible planet
+                try:
+                    bbox = surf.get_bounding_rect()
+                    if bbox.width and bbox.height:
+                        surf = surf.subsurface(bbox).copy()
+                except Exception:
+                    pass
+                planets._sprite_orig = surf.copy()
+                # scale base sprite to requested height
+                if surf.get_height() != planet_height:
+                    pw = max(1, int(surf.get_width() * (planet_height / surf.get_height())))
+                    planets._sprite_base = pygame.transform.smoothscale(surf, (pw, planet_height))
+                else:
+                    planets._sprite_base = surf
+                # set a modest rotation speed
+                try:
+                    planets._angle = 0.0
+                    planets._rot_speed = 12.0
+                except Exception:
+                    pass
+            except Exception:
+                # fallback to module initializer
+                try:
+                    planets.init_planet(os.path.dirname(__file__), filename=None, height=320, rot_speed_deg=36.0)
+                except Exception:
+                    pass
+        else:
+            planets.init_planet(os.path.dirname(__file__), filename=None, height=320, rot_speed_deg=36.0)
+    else:
+        planets.init_planet(os.path.dirname(__file__), filename=None, height=320, rot_speed_deg=36.0)
 except Exception:
     pass
 
@@ -271,9 +310,11 @@ while run:
 
     # Draw a large rotating decorative planet always visible (screen coords)
     try:
-        # centered near top-middle; change values if you want different position
-        # use a reasonable height so the planet is visible on-screen
-        planets.draw_planet_screen(screen, X // 2, 140, height=320, gap=0)
+        # Draw a very large planet off to the right (mostly off-screen) so it appears huge
+        big_h = max(800, int(Y * 1.4))
+        center_x = X + (big_h // 4)
+        center_y = Y // 2
+        planets.draw_planet_screen(screen, center_x, center_y, height=big_h, gap=0)
     except Exception:
         pass
 
