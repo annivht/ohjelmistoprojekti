@@ -10,7 +10,6 @@ import os
 import pygame
 import random
 import math
-#from player import Player
 from EnemyAI import StraightEnemy, CircleEnemy
 from boss_enemy import BossEnemy
 from points import Points
@@ -303,23 +302,63 @@ while run:
                 except Exception:
                     pass
 
-                # Apply simple velocity impulse: player gets a stronger impulse, enemy smaller opposite impulse
-                player_impulse = 220.0
-                enemy_impulse = 140.0
+                # Mass-based impulse along collision normal (1D impulse resolution)
+                # Ensure both entities have velocity vectors
+                p_vel = getattr(player, 'vel', None)
+                if p_vel is None:
+                    try:
+                        player.vel = pygame.Vector2(0, 0)
+                        p_vel = player.vel
+                    except Exception:
+                        p_vel = pygame.Vector2(0, 0)
+
+                e_vel = getattr(enemy, 'vel', None)
+                if e_vel is None:
+                    try:
+                        enemy.vel = pygame.Vector2(0, 0)
+                        e_vel = enemy.vel
+                    except Exception:
+                        e_vel = pygame.Vector2(0, 0)
+
+                # masses (defaults)
+                m1 = float(getattr(player, 'mass', 1.0))
+                m2 = float(getattr(enemy, 'mass', 1.0))
+
+                # relative velocity along normal
+                v_rel = p_vel - e_vel
+                vel_along_normal = v_rel.dot(normal)
+
+                # restitution (bounciness)
+                restitution = 0.5
+
+                # If velocities are separating already, still apply a small corrective impulse to push apart
+                # Compute impulse scalar j
+                denom = (1.0 / m1) + (1.0 / m2)
+                j = 0.0
+                # Use negative vel_along_normal (approach) or, if zero/positive, apply a corrective nudge
+                if vel_along_normal < 0:
+                    j = -(1.0 + restitution) * vel_along_normal / denom
+                else:
+                    # small separation impulse proportional to overlap/separation distance
+                    j = (max(8.0, separation) * 0.5) / denom
+
+                # clamp impulse to avoid extreme values
+                j = max(min(j, 2000.0), -2000.0)
+
+                # apply impulse
                 try:
-                    player.vel += normal * player_impulse
+                    player.vel = pygame.Vector2(p_vel + (j * normal) / m1)
                 except Exception:
                     try:
-                        # try setting vel attr if missing
-                        player.vel = pygame.Vector2(normal * player_impulse)
+                        player.vel = pygame.Vector2((j * normal) / m1)
                     except Exception:
                         pass
 
                 try:
                     if hasattr(enemy, 'vel'):
-                        enemy.vel -= normal * enemy_impulse
+                        enemy.vel = pygame.Vector2(e_vel - (j * normal) / m2)
                     else:
-                        # best-effort: for circular enemies, nudge their angle so they move away
+                        # fallback: nudge circular enemies' angle
                         if hasattr(enemy, 'angle'):
                             enemy.angle += math.pi * 0.5
                 except Exception:
