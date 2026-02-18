@@ -52,3 +52,45 @@ class CircleEnemy(Enemy):
         x = self.center.x + math.cos(self.angle) * self.radius
         y = self.center.y + math.sin(self.angle) * self.radius
         self.rect.center = (int(x), int(y))
+
+
+class DownEnemy(Enemy):
+    """Lentää ylhäältä alas ja takaisin."""
+    def __init__(self, image, x, y, speed=200):
+        super().__init__(image, x, y)
+        self.speed = speed
+        self.vy = speed  # Liikkuu alas
+
+    def update(self, dt_ms, player=None, world_rect=None):
+        dt = dt_ms / 1000.0
+        self.rect.y += int(self.vy * dt)
+
+        if world_rect is not None:
+            if self.rect.top <= world_rect.top:
+                self.rect.top = world_rect.top
+                self.vy = self.speed  # Käänny alas
+            elif self.rect.bottom >= world_rect.bottom:
+                self.rect.bottom = world_rect.bottom
+                self.vy = -self.speed  # Käänny ylös
+            self.rect.clamp_ip(world_rect)
+
+
+class UpEnemy(Enemy):
+    """Lentää alhaalta ylös ja takaisin."""
+    def __init__(self, image, x, y, speed=200):
+        super().__init__(image, x, y)
+        self.speed = speed
+        self.vy = -speed  # Liikkuu ylös (negatiivinen)
+
+    def update(self, dt_ms, player=None, world_rect=None):
+        dt = dt_ms / 1000.0
+        self.rect.y += int(self.vy * dt)
+
+        if world_rect is not None:
+            if self.rect.top <= world_rect.top:
+                self.rect.top = world_rect.top
+                self.vy = self.speed  # Käänny alas
+            elif self.rect.bottom >= world_rect.bottom:
+                self.rect.bottom = world_rect.bottom
+                self.vy = -self.speed  # Käänny ylös
+            self.rect.clamp_ip(world_rect)

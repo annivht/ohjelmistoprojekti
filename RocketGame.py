@@ -3,7 +3,7 @@ import os
 import pygame
 import random
 #from player import Player
-from enemy import StraightEnemy, CircleEnemy
+from enemy import StraightEnemy, CircleEnemy, DownEnemy, UpEnemy
 from boss_enemy import BossEnemy
 from points import Points
 sys.path.append(os.path.dirname(__file__))
@@ -79,10 +79,58 @@ boss_image = pygame.transform.scale(
 
 world_rect = pygame.Rect(0, 0, tausta_leveys, tausta_korkeus)
 
+# Wave system
 enemies = []
-enemies.append(StraightEnemy(enemy_imgs[0], 200, 200, speed=220))
-enemies.append(CircleEnemy(enemy_imgs[1], tausta_leveys // 2 + 300, tausta_korkeus // 2,
-                           radius=180, angular_speed=2.2))
+current_wave = 1
+wave_cleared = False
+
+def spawn_wave(wave_num):
+    """Spawns enemies based on the wave number"""
+    global enemies
+    enemies.clear()
+    
+    if wave_num == 1:
+        # Wave 1: 2 enemies (original)
+        enemies.append(StraightEnemy(enemy_imgs[0], 200, 200, speed=220))
+        enemies.append(CircleEnemy(enemy_imgs[1], tausta_leveys // 2 + 300, tausta_korkeus // 2,
+                                   radius=180, angular_speed=2.2))
+    
+    elif wave_num == 2:
+        # Wave 2: 3 enemies moving randomly
+        for i in range(3):
+            x = random.randint(100, tausta_leveys - 100)
+            y = random.randint(100, tausta_korkeus - 100)
+            enemies.append(StraightEnemy(enemy_imgs[i % len(enemy_imgs)], x, y, speed=200))
+    
+    elif wave_num == 3:
+        # Wave 3: 5 enemies - 3 moving from top to bottom, 2 moving from bottom to top
+        spacing = tausta_leveys // 6  # 5 enemies with even spacing
+        
+        # 3 enemies moving down
+        for i in range(3):
+            x = spacing * (i + 1)
+            y = 30
+            enemies.append(DownEnemy(enemy_imgs[i % len(enemy_imgs)], x, y, speed=250))
+        
+        # 2 enemies moving up
+        for i in range(2):
+            x = spacing * (i + 3.5)
+            y = tausta_korkeus - 30
+            enemies.append(UpEnemy(enemy_imgs[(i + 3) % len(enemy_imgs)], x, y, speed=250))
+    
+    elif wave_num == 4:
+        # Wave 4: Boss enemy
+        boss = BossEnemy(
+            boss_image,
+            world_rect,
+            hp=12,
+            enter_speed=280,
+            move_speed=320
+        )
+        enemies.append(boss)
+
+# Spawn the first wave
+spawn_wave(current_wave)
 
 
 planeetta_paikat = []
@@ -127,7 +175,6 @@ player_scale_multiplier = 10
 player_scale_factor = 0.5  # Skaalaa pelaaja puoleen kokoon
 player = Player(player_scale_factor, frames, player_start_x, player_start_y, boost_frames=boost_frames)
 
-# Pelaajan elämät
 lives = 3
 enemy_hit_cooldown = 0
 enemy_hit_cooldown_duration = 1000  # 1 sekunti (millisekuntia)
@@ -140,10 +187,6 @@ camera_x = 0
 camera_y = 0
 run = True
 pause = False
-
-# BOSS ilmestyy pisteiden mukaan
-boss_spawned = False
-BOSS_TRIGGER_SCORE = 2
 
 while run:
     # Tapahtumien käsittely
@@ -203,19 +246,10 @@ while run:
 
                 break  # Siirry seuraavaan ammukseen
 
-    # Bossen ilmestyminen
-    if (not boss_spawned) and pistejarjestelma.hae_pisteet() >= BOSS_TRIGGER_SCORE:
-        boss_spawned = True
-
-        boss = BossEnemy(
-            boss_image,
-            world_rect,
-            hp=12,
-            enter_speed=280,
-            move_speed=320
-    )
-
-        enemies.append(boss)   
+    # Wave progression system
+    if len(enemies) == 0 and current_wave < 4:
+        current_wave += 1
+        spawn_wave(current_wave)   
 
     # Tarkista osumat vihollisten ja pelaajan välillä
     if enemy_hit_cooldown <= 0:
