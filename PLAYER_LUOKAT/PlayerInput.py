@@ -15,5 +15,5 @@ class PlayerInput:
         self.moveDown = keys[pygame.K_s]
         self.turnLeft = keys[pygame.K_d]
         self.turnRight = keys[pygame.K_a]
-        self.shoot = keys[pygame.K_RCTRL]
+        self.shoot = keys[pygame.K_p]
         self.hit = keys[pygame.K_h]
