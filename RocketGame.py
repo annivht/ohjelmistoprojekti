@@ -98,6 +98,10 @@ enemy_imgs = [
         key=lambda name: int(os.path.splitext(name)[0])  # "1.png" -> 1
     )
 ]
+
+# Load sprite settings for optional enemy visuals
+ss = SpriteSettings(base_path=os.path.join(os.path.dirname(__file__), 'enemy-sprite'))
+ss.load_all()
 # BOSS kuva
 boss_image = pygame.transform.scale(
     pygame.image.load(os.path.join(viholliset_path, "12.png")).convert_alpha(),
@@ -119,7 +123,6 @@ spatial_hash = SpatialHash()
 collisions = set()
 
 # Wave system
-# Wave system
 enemies = []
 current_wave = 1
 wave_cleared = False
@@ -131,19 +134,26 @@ def spawn_wave(wave_num):
     
     if wave_num == 1:
         # Wave 1: 2 enemies (original)
-        current_wave = 1
-wave_cleared = False
+        # Prefer ship frames from SpriteSettings if available, else fallback to the old folder images
+        ship_frames = ss.ship_frames if hasattr(ss, 'ship_frames') and ss.ship_frames else None
+        exhaust_turbo = ss.exhaust_turbo if hasattr(ss, 'exhaust_turbo') else []
+        exhaust_normal = ss.exhaust_normal if hasattr(ss, 'exhaust_normal') else []
+        shot_frames = ss.shot_frames if hasattr(ss, 'shot_frames') else []
 
-def spawn_wave(wave_num):
-    """Spawns enemies based on the wave number"""
-    global enemies
-    enemies.clear()
-    
-    if wave_num == 1:
-        # Wave 1: 2 enemies (original)
-        enemies.append(StraightEnemy(enemy_imgs[0], 200, 200, speed=220))
-                enemies.append(CircleEnemy(enemy_imgs[1], tausta_leveys // 2 + 300, tausta_korkeus // 2,
-                                           radius=180, angular_speed=2.2))
+        img0 = ship_frames[0] if ship_frames and len(ship_frames) > 0 else enemy_imgs[0]
+        img1 = ship_frames[1] if ship_frames and len(ship_frames) > 1 else enemy_imgs[1]
+
+        e1 = StraightEnemy(img0, 200, 200, speed=220)
+        e1.exhaust_turbo = exhaust_turbo
+        e1.exhaust_normal = exhaust_normal
+        e1.shots = shot_frames
+        enemies.append(e1)
+
+        e2 = CircleEnemy(img1, tausta_leveys // 2 + 300, tausta_korkeus // 2, radius=180, angular_speed=2.2)
+        e2.exhaust_turbo = exhaust_turbo
+        e2.exhaust_normal = exhaust_normal
+        e2.shots = shot_frames
+        enemies.append(e2)
     
     elif wave_num == 2:
         # Wave 2: 3 enemies moving randomly
@@ -183,63 +193,6 @@ def spawn_wave(wave_num):
 spawn_wave(current_wave)
 enemy_bullets = []
 muzzles = []
-# Prefer ship frames from SpriteSettings if available, else fallback to the old folder images
-ship_frames = ss.ship_frames if hasattr(ss, 'ship_frames') and ss.ship_frames else None
-exhaust_turbo = ss.exhaust_turbo if hasattr(ss, 'exhaust_turbo') else []
-exhaust_normal = ss.exhaust_normal if hasattr(ss, 'exhaust_normal') else []
-shot_frames = ss.shot_frames if hasattr(ss, 'shot_frames') else []
-
-img0 = ship_frames[0] if ship_frames and len(ship_frames) > 0 else enemy_imgs[0]
-img1 = ship_frames[1] if ship_frames and len(ship_frames) > 1 else enemy_imgs[1]
-
-e1 = StraightEnemy(img0, 200, 200, speed=220)
-e1.exhaust_turbo = exhaust_turbo
-e1.exhaust_normal = exhaust_normal
-e1.shots = shot_frames
-enemies.append(e1)
-
-e2 = CircleEnemy(img1, tausta_leveys // 2 + 300, tausta_korkeus // 2, radius=180, angular_speed=1)
-e2.exhaust_turbo = exhaust_turbo
-e2.exhaust_normal = exhaust_normal
-e2.shots = shot_frames
-enemies.append(e2)
-    
-    elif wave_num == 2:
-        # Wave 2: 3 enemies moving randomly
-        for i in range(3):
-            x = random.randint(100, tausta_leveys - 100)
-            y = random.randint(100, tausta_korkeus - 100)
-            enemies.append(StraightEnemy(enemy_imgs[i % len(enemy_imgs)], x, y, speed=200))
-    
-    elif wave_num == 3:
-        # Wave 3: 5 enemies - 3 moving from top to bottom, 2 moving from bottom to top
-        spacing = tausta_leveys // 6  # 5 enemies with even spacing
-        
-        # 3 enemies moving down
-        for i in range(3):
-            x = spacing * (i + 1)
-            y = 30
-            enemies.append(DownEnemy(enemy_imgs[i % len(enemy_imgs)], x, y, speed=250))
-        
-        # 2 enemies moving up
-        for i in range(2):
-            x = spacing * (i + 3.5)
-            y = tausta_korkeus - 30
-            enemies.append(UpEnemy(enemy_imgs[(i + 3) % len(enemy_imgs)], x, y, speed=250))
-    
-    elif wave_num == 4:
-        # Wave 4: Boss enemy
-        boss = BossEnemy(
-            boss_image,
-            world_rect,
-            hp=12,
-            enter_speed=280,
-            move_speed=320
-        )
-        enemies.append(boss)
-
-# Spawn the first wave
-spawn_wave(current_wave)
 
 
 planeetta_paikat = []
