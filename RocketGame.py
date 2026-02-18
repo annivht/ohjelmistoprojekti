@@ -335,32 +335,11 @@ while run:
             except Exception:
                 pass
 
-    # Draw boss health bars in the left margin of the canvas (stacked)
+    # Draw boss health bars using BossEnemy method (moved into class)
     bosses = [be for be in enemies if isinstance(be, BossEnemy)]
     for idx, e in enumerate(bosses):
         try:
-            # Simple explicit sizes and positions for fill and frame
-            margin = 16
-            fill_w, fill_h = 20, 40
-            frame_w, frame_h = 340, 56
-            frame_x = margin
-            frame_y = margin + idx * (frame_h + 8)
-            # center fill inside frame
-            fill_x = frame_x + (frame_w - fill_w) // 2
-            fill_y = frame_y + (frame_h - fill_h) // 2
-
-            cur_hp = getattr(e, 'hp', getattr(e, 'health', getattr(e, 'HP', 0)))
-            max_hp = getattr(e, 'max_hp', getattr(e, 'max_health', getattr(e, 'HP_MAX', cur_hp)))
-
-            imgs = get_enemy_bar_images()
-            draw_healthbar_custom(screen,
-                                  fill_w, fill_h,
-                                  fill_x, fill_y,
-                                  frame_w, frame_h,
-                                  frame_x, frame_y,
-                                  cur_hp, max_hp,
-                                  imgs=imgs,
-                                  tint=(255,40,40))
+            e.draw_health_bar(screen, idx)
         except Exception:
             pass
 
