@@ -30,6 +30,7 @@ result = menu.run()
 if result != "start_game":
     pygame.quit()
     sys.exit()
+pygame.event.clear()
 
 currentWorkDir = os.getcwd()
 print(currentWorkDir)
@@ -38,7 +39,7 @@ sourceFileDir = os.path.dirname(os.path.abspath(__file__))
 print(sourceFileDir)
 
 
-pygame.init()
+#pygame.init()
 Y = 800
 X = 1600
 
@@ -128,6 +129,78 @@ enemies = []
 current_wave = 1
 wave_cleared = False
 
+# pelin reset
+def reset_game():
+    global current_wave, wave_cleared, lives, enemy_hit_cooldown,pistejarjestelma
+
+    # wave reset
+    current_wave = 1
+    wave_cleared = False
+
+    # clear enemies + enemy bullets + muzzle effects+ collisions
+    enemies.clear()
+    enemy_bullets.clear()
+    muzzles.clear()
+    collisions.clear()
+
+    try:
+        player.weapons.bullets.clear()
+    except Exception:
+        pass
+    #resetplayer health + lives
+    
+    player.health = int(getattr(player, "max_health", 5))
+    lives = player.health
+   
+
+    # reset player
+ 
+    player.pos = pygame.Vector2(player_start_x, player_start_y)
+    player.rect.center = (int(player.pos.x), int(player.pos.y))
+    player.vel = pygame.Vector2(0, 0)
+    
+    enemy_hit_cooldown = 0
+
+    # spawn wave 1 properly
+    spawn_wave(current_wave)
+    pygame.event.clear()
+
+    # reset score 
+    pistejarjestelma = Points() 
+
+#“RESTART = aloita sama taso alusta”
+def restart_current_wave():
+    global enemy_hit_cooldown, lives, collisions
+
+    # tyhjennä kaikki kesken jääneet asiat
+    enemies.clear()
+    enemy_bullets.clear()
+    muzzles.clear()
+    collisions.clear()
+
+    try:
+        player.weapons.bullets.clear()
+    except Exception:
+        pass
+
+    # reset player
+    player.health = int(getattr(player, "max_health", 5))
+    lives = player.health
+
+    try:
+        player.pos = pygame.Vector2(player_start_x, player_start_y)
+        player.rect.center = (int(player.pos.x), int(player.pos.y))
+        player.vel = pygame.Vector2(0, 0)
+    except Exception:
+        player.rect.center = (player_start_x, player_start_y)
+
+    enemy_hit_cooldown = 0
+
+    # tärkein: käynnistä NYKYINEN wave alusta
+    spawn_wave(current_wave)
+
+    pygame.event.clear()
+
 def spawn_wave(wave_num):
     """Spawns enemies based on the wave number"""
     global enemies
@@ -191,9 +264,9 @@ def spawn_wave(wave_num):
         enemies.append(boss)
 
 # Spawn the first wave
-spawn_wave(current_wave)
 enemy_bullets = []
 muzzles = []
+spawn_wave(current_wave)
 
 
 planeetta_paikat = []
@@ -607,39 +680,29 @@ while run:
     if enemy_hit_cooldown > 0:
         enemy_hit_cooldown -= dt
 
-    # Tarkista pelin loppu -> näytä death menu instead of immediate quit
+
+# Tarkista pelin loppu
     if lives <= 0:
         game_over_screen.show(X, Y)
         game_over = game_over_screen.run()
+
         if game_over == "play_again":
-            # Nollataan peli (pelaaja, viholliset, pisteet, elämät).
-            # Pelaaja takaisin keskelle, viholliset uudestaan, pisteet nollaan, elämiä 3.
-            player.rect.center = (player_start_x, player_start_y)
-            enemies = [
-                StraightEnemy(enemy_imgs[0], 200, 200, speed=220),
-                CircleEnemy(enemy_imgs[1], tausta_leveys // 2 + 300, tausta_korkeus // 2,
-                            radius=180, angular_speed=2.2)
-            ]
-            lives = 3
-            pistejarjestelma.score = 0
+            reset_game()
+            pygame.event.clear()
+
         elif game_over == "main_menu":
-            # Näytetään päävalikko uudestaan.
             menu = MainMenu()
             result = menu.run()
             if result != "start_game":
                 run = False
-            # Nollataan peli päävalikkoon palattaessa.
-            player.rect.center = (player_start_x, player_start_y)
-            enemies = [
-                StraightEnemy(enemy_imgs[0], 200, 200, speed=220),
-                CircleEnemy(enemy_imgs[1], tausta_leveys // 2 + 300, tausta_korkeus // 2,
-                            radius=180, angular_speed=2.2)
-            ]
-            lives = 3
-            pistejarjestelma.score = 0
+            else:
+                reset_game()
+            pygame.event.clear()
+
         elif game_over == "quit":
             run = False
-        death_menu = True
+
+        continue  # tämä on ok: hyppää seuraavaan frameen kuoleman jälkeen
 
     for e in enemies:
         e.draw(screen, camera_x, camera_y)
@@ -730,88 +793,6 @@ while run:
     except Exception:
         lives_text = font.render(f"Elämät: {lives}", True, (255, 255, 255))
         screen.blit(lives_text, (X - 200, 10))
-
-    # Death overlay (Restart / Quit)
-    if death_menu:
-        overlay = pygame.Surface((X, Y))
-        overlay.set_alpha(220)
-        overlay.fill((10, 10, 10))
-        screen.blit(overlay, (0, 0))
-
-        font_large = pygame.font.SysFont('Arial', 48)
-        font_small = pygame.font.SysFont('Arial', 28)
-        title = font_large.render("", True, (220, 80, 80))
-        # center the title and buttons using the actual screen rect
-        screen_rect = screen.get_rect()
-        cx, cy = screen_rect.center
-        title_rect = title.get_rect(center=(cx, cy - 100))
-        screen.blit(title, title_rect.topleft)
-
-        btn_w, btn_h = 320, 64
-        restart_btn = pygame.Rect(0, 0, btn_w, btn_h)
-        quit_btn = pygame.Rect(0, 0, btn_w, btn_h)
-        restart_btn.center = (cx, cy)
-        quit_btn.center = (cx, cy + btn_h + 16)
-
-        pygame.draw.rect(screen, (70, 150, 70), restart_btn)
-        pygame.draw.rect(screen, (150, 70, 70), quit_btn)
-
-        # draw button labels centered
-        restart_label = font_small.render("Restart", True, (255, 255, 255))
-        quit_label = font_small.render("Quit", True, (255, 255, 255))
-        screen.blit(restart_label, restart_label.get_rect(center=restart_btn.center).topleft)
-        screen.blit(quit_label, quit_label.get_rect(center=quit_btn.center).topleft)
-
-        pygame.display.update()
-
-        # modal loop for death menu
-        in_death = True
-        while in_death:
-            for ev in pygame.event.get():
-                if ev.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
-                    mx, my = ev.pos
-                    if restart_btn.collidepoint(mx, my):
-                        # reset player health and position, clear enemies and reset cooldown
-                        try:
-                            player.health = int(getattr(player, 'max_health', 5))
-                            lives = player.health
-                        except Exception:
-                            lives = 5
-                        try:
-                            player.pos = pygame.Vector2(player_start_x, player_start_y)
-                            player.rect.center = (int(player.pos.x), int(player.pos.y))
-                            player.vel = pygame.Vector2(0, 0)
-                        except Exception:
-                            pass
-                        # recreate simple enemies
-                        enemies.clear()
-                        try:
-                            ne1 = StraightEnemy(img0, 200, 200, speed=220)
-                            ne1.exhaust_turbo = exhaust_turbo
-                            ne1.exhaust_normal = exhaust_normal
-                            ne1.shots = shot_frames
-                            enemies.append(ne1)
-                            ne2 = CircleEnemy(img1, tausta_leveys // 2 + 300, tausta_korkeus // 2, radius=180, angular_speed=2.2)
-                            ne2.exhaust_turbo = exhaust_turbo
-                            ne2.exhaust_normal = exhaust_normal
-                            ne2.shots = shot_frames
-                            enemies.append(ne2)
-                        except Exception:
-                            pass
-                        enemy_hit_cooldown = 0
-                        death_menu = False
-                        in_death = False
-                        break
-                    elif quit_btn.collidepoint(mx, my):
-                        pygame.quit()
-                        sys.exit()
-                if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
-                    pygame.quit()
-                    sys.exit()
-        continue  # skip normal frame logic while death menu handled
 
     # Pause overlay
     if pause:

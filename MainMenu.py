@@ -1,13 +1,9 @@
 import pygame
 import sys
 
-pygame.init()
-
 # Näytön asetukset
 SCREEN_WIDTH = 1600
 SCREEN_HEIGHT = 800
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Rocket Game - Main Menu")
 
 # Värit
 BLACK = (0, 0, 0)
@@ -17,9 +13,9 @@ LIGHT_BLUE = (100, 150, 200)
 HOVER_COLOR = (150, 200, 255)
 
 # Fontit
-title_font = pygame.font.Font(None, 80)
-button_font = pygame.font.Font(None, 50)
-small_font = pygame.font.Font(None, 30)
+title_font = None
+button_font = None
+small_font = None
 
 
 class Button:
@@ -58,37 +54,26 @@ class MainMenu:
     """Päämenun hallinta"""
     
     def __init__(self):
+        global title_font, button_font, small_font
+
+        # init vain jos ei ole jo initattu
+        if not pygame.get_init():
+            pygame.init()
+        if not pygame.display.get_init():
+            pygame.display.init()
+
+        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        pygame.display.set_caption("Rocket Game - Main Menu")
+
+        # fontit vasta nyt
+        title_font = pygame.font.Font(None, 80)
+        button_font = pygame.font.Font(None, 50)
+        small_font = pygame.font.Font(None, 30)
+
         self.buttons = [
-            Button(
-                SCREEN_WIDTH // 2 - 150,
-                SCREEN_HEIGHT // 2 - 100,
-                300,
-                80,
-                "START GAME",
-                LIGHT_BLUE,
-                WHITE,
-                action="start"
-            ),
-            Button(
-                SCREEN_WIDTH // 2 - 150,
-                SCREEN_HEIGHT // 2 + 20,
-                300,
-                80,
-                "SETTINGS",
-                LIGHT_BLUE,
-                WHITE,
-                action="settings"
-            ),
-            Button(
-                SCREEN_WIDTH // 2 - 150,
-                SCREEN_HEIGHT // 2 + 140,
-                300,
-                80,
-                "QUIT",
-                LIGHT_BLUE,
-                WHITE,
-                action="quit"
-            ),
+            Button(SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 - 100, 300, 80, "START GAME", LIGHT_BLUE, WHITE, action="start"),
+            Button(SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 + 20,  300, 80, "SETTINGS",   LIGHT_BLUE, WHITE, action="settings"),
+            Button(SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 + 140, 300, 80, "QUIT",       LIGHT_BLUE, WHITE, action="quit"),
         ]
         self.clock = pygame.time.Clock()
         self.running = True
@@ -109,18 +94,18 @@ class MainMenu:
     
     def draw(self):
         """Piirtää menun"""
-        screen.fill(DARK_BLUE)
+        self.screen.fill(DARK_BLUE)
         
         # Piirtää otsikko
         title_surf = title_font.render("ROCKET GAME", True, WHITE)
         title_rect = title_surf.get_rect(center=(SCREEN_WIDTH // 2, 100))
-        screen.blit(title_surf, title_rect)
+        self.screen.blit(title_surf, title_rect)
         
         # Piirtää napit
         mouse_pos = pygame.mouse.get_pos()
         for button in self.buttons:
             button.update(mouse_pos)
-            button.draw(screen)
+            button.draw(self.screen)
         
         pygame.display.update()
     
@@ -143,20 +128,3 @@ class MainMenu:
             self.clock.tick(60)
         
         return "quit"
-
-
-def main():
-    """Pääfunktio"""
-    menu = MainMenu()
-    result = menu.run()
-    
-    if result == "start_game":
-        # Tähän tulee pelin käynnistys
-        print("TODO: Käynnistä RocketGame.py")
-    
-    pygame.quit()
-    sys.exit()
-
-
-if __name__ == "__main__":
-    main()
