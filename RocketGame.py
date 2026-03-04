@@ -158,7 +158,7 @@ if os.path.isdir(boss_folder):
 
 # enemy uses the same Explosion1 frames but smaller
 if os.path.isdir(boss_folder):
-    enemy_frames = ExplosionManager.load_frames(folder=boss_folder, size=(160, 160))
+    enemy_frames = ExplosionManager.load_frames(folder=boss_folder, size=(80, 80))
     if enemy_frames:
         explosion_manager.set_frames_for('enemy', enemy_frames)
 

@@ -1,7 +1,7 @@
 # Python program to create a basic settings menu using the pygame_menu module
 
 import pygame
-import pygame_menu as pm
+import pygame_menu as pm 
 
 
 # Oletusnäytön asetukset (käytetään vain koordinaatteihin, ei luoda uutta ikkunaa)
