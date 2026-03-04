@@ -210,6 +210,8 @@ MAX_WAVE = 4
 wave_cleared = False
 BOSS_CLEAR_MENU_DELAY_MS = 1800
 boss_clear_menu_delay_remaining = None
+GAME_OVER_DELAY_MS = 1200
+game_over_delay_remaining = None
 
 
 def clear_round_state():
@@ -224,12 +226,13 @@ def clear_round_state():
 
 # pelin reset
 def reset_game():
-    global current_wave, wave_cleared, lives, enemy_hit_cooldown,pistejarjestelma, boss_clear_menu_delay_remaining
+    global current_wave, wave_cleared, lives, enemy_hit_cooldown,pistejarjestelma, boss_clear_menu_delay_remaining, game_over_delay_remaining
 
     # wave reset
     current_wave = 1
     wave_cleared = False
     boss_clear_menu_delay_remaining = None
+    game_over_delay_remaining = None
 
     # clear enemies + enemy bullets + muzzle effects+ collisions
     clear_round_state()
@@ -914,6 +917,15 @@ while run:
 
 # Tarkista pelin loppu
     if lives <= 0:
+        if game_over_delay_remaining is None:
+            game_over_delay_remaining = GAME_OVER_DELAY_MS
+        else:
+            game_over_delay_remaining -= dt
+
+        if game_over_delay_remaining > 0:
+            continue
+
+        game_over_delay_remaining = None
         game_over_screen.show(X, Y)
         game_over = game_over_screen.run()
 

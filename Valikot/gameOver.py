@@ -23,9 +23,9 @@ class GameOverScreen:
         self.screen = screen
         self.font = pygame.font.SysFont('Arial', 48)
         self.buttons = [
-            Button(100, 200, 200, 50, "Pelaa uudelleen", (0, 255, 0), (255, 255, 255), screen),
-            Button(100, 300, 200, 50, "Päävalikko", (0, 255, 0), (255, 255, 255), screen),
-            Button(100, 400, 200, 50, "Lopeta", (0, 255, 0), (255, 255, 255), screen)
+            Button(100, 200, 200, 50, "TRY AGAIN", (0, 255, 0), (255, 255, 255), screen),
+            Button(100, 300, 200, 50, "MAIN MENU", (0, 255, 0), (255, 255, 255), screen),
+            Button(100, 400, 200, 50, "QUIT", (0, 255, 0), (255, 255, 255), screen)
         ]
     
     def handle_event(self, event):
@@ -50,13 +50,13 @@ class GameOverScreen:
                 if event.type == pygame.QUIT:
                     running = False
                 handle_event = self.handle_event(event)
-                if handle_event == "Pelaa uudelleen":
+                if handle_event == "TRY AGAIN":
                     print("Pelaa uudelleen -painiketta painettu")
                     return "play_again"
-                elif handle_event == "Päävalikko":
+                elif handle_event == "MAIN MENU":
                     print("Päävalikko -painiketta painettu")
                     return "main_menu"
-                elif handle_event == "Lopeta":
+                elif handle_event == "QUIT":
                     print("Lopeta -painiketta painettu")
                     return "quit"
         return "quit"
