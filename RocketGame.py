@@ -550,8 +550,9 @@ camera_x = 0
 camera_y = 0
 run = True
 pause = False
+ENABLE_LEGACY_LOOP = False
 
-while run:
+while ENABLE_LEGACY_LOOP and run:
     # Tapahtumien käsittely
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -1052,4 +1053,211 @@ while run:
     pygame.display.update()
     
 
-pygame.quit()
+if ENABLE_LEGACY_LOOP:
+    pygame.quit()
+
+
+class Game:
+    """State-driven runtime: updated and drawn by PlayState."""
+
+    def __init__(self):
+        self.running = True
+        self.pause = False
+        self.camera_x = 0
+        self.camera_y = 0
+        self.dt = 0
+
+    def update(self, events):
+        global lives, enemy_hit_cooldown, current_wave, boss_clear_menu_delay_remaining
+
+        for event in events:
+            if event.type == pygame.QUIT:
+                self.running = False
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                self.pause = True
+
+        self.dt = clock.tick(60)
+        planets.update_planet(self.dt)
+
+        player.update(self.dt)
+        player.move(0, 0, tausta_leveys, tausta_korkeus)
+
+        self.camera_x = max(0, min(player.rect.centerx - X // 2, tausta_leveys - X))
+        self.camera_y = max(0, min(player.rect.centery - Y // 2, tausta_korkeus - Y))
+
+        for e in enemies:
+            e.update(self.dt, player, world_rect)
+            if isinstance(e, BossEnemy):
+                e.maybe_shoot(self.dt, {'bullets': enemy_bullets, 'muzzles': muzzles}, player=player)
+            else:
+                e.maybe_shoot(self.dt, {'bullets': enemy_bullets, 'muzzles': muzzles})
+
+        for bullet in list(player.weapons.bullets):
+            for enemy in list(enemies):
+                if not bullet.rect.colliderect(enemy.rect):
+                    continue
+
+                impact_pos = bullet.rect.center
+                if bullet in player.weapons.bullets:
+                    player.weapons.bullets.remove(bullet)
+
+                if isinstance(enemy, BossEnemy):
+                    died = enemy.take_hit(1)
+                    if died:
+                        if explosion_manager.frames_by_type.get('boss'):
+                            explosion_manager.spawn_boss(enemy.rect.center, fps=24)
+                        elif explosion_manager.frames:
+                            explosion_manager.spawn(enemy.rect.center, fps=24)
+                        enemies.remove(enemy)
+                        pistejarjestelma.lisaa_piste(5)
+                    else:
+                        if explosion_manager.frames_by_type.get('enemy'):
+                            explosion_manager.spawn_enemy(impact_pos, fps=24)
+                        elif explosion_manager.frames:
+                            explosion_manager.spawn(impact_pos, fps=24)
+                else:
+                    if explosion_manager.frames_by_type.get('enemy'):
+                        explosion_manager.spawn_enemy(impact_pos, fps=24)
+                    elif explosion_manager.frames:
+                        explosion_manager.spawn(impact_pos, fps=24)
+                    enemies.remove(enemy)
+                    pistejarjestelma.lisaa_piste(1)
+
+                break
+
+        for b in list(enemy_bullets):
+            b.update(self.dt, world_rect)
+            if getattr(b, 'dead', False):
+                enemy_bullets.remove(b)
+                continue
+            if getattr(b, 'state', '') == 'flight' and b.rect.colliderect(player.rect):
+                b.explode()
+                enemy_bullets.remove(b)
+                if hasattr(player, 'health'):
+                    player.health = max(0, int(player.health) - 1)
+                    lives = player.health
+                    try:
+                        if hasattr(player, 'trigger_hit_animation'):
+                            player.trigger_hit_animation()
+                    except Exception:
+                        pass
+                else:
+                    lives -= 1
+
+        for m in list(muzzles):
+            m.update(self.dt)
+            if getattr(m, 'dead', False):
+                muzzles.remove(m)
+
+        if enemy_hit_cooldown > 0:
+            enemy_hit_cooldown -= self.dt
+
+        if len(enemies) == 0 and current_wave < MAX_WAVE:
+            boss_clear_menu_delay_remaining = None
+            current_wave += 1
+            spawn_wave(current_wave)
+
+        if lives <= 0:
+            game_over_screen.show(X, Y)
+            game_over = game_over_screen.run()
+            if game_over == "play_again":
+                reset_game()
+            elif game_over in ("main_menu", "quit"):
+                self.running = False
+
+        if self.pause:
+            from Valikot.PauseMenu import PauseMenu
+
+            pause_menu = PauseMenu()
+            action = pause_menu.run(screen.copy())
+            if action == "quit":
+                self.running = False
+            self.pause = False
+
+        explosion_manager.update(self.dt)
+
+    def draw(self, target_screen):
+        global screen
+        screen = target_screen
+
+        screen.blit(tausta, (0, 0), area=(self.camera_x, self.camera_y, X, Y))
+
+        try:
+            big_h = max(800, int(Y * 1.4))
+            center_x = X + (big_h // 4)
+            center_y = Y // 2
+            planets.draw_planet_screen(screen, center_x, center_y, height=big_h, gap=0)
+        except Exception:
+            pass
+
+        for kuva, (x, y) in zip(planeetat, planeetta_paikat):
+            screen.blit(kuva, (x - self.camera_x, y - self.camera_y))
+
+        for e in enemies:
+            e.draw(screen, self.camera_x, self.camera_y)
+
+        for b in enemy_bullets:
+            b.draw(screen, self.camera_x, self.camera_y)
+
+        for m in muzzles:
+            m.draw(screen, self.camera_x, self.camera_y)
+
+        player.draw(screen, self.camera_x, self.camera_y)
+        explosion_manager.draw(screen, self.camera_x, self.camera_y)
+
+        for idx, e in enumerate([be for be in enemies if isinstance(be, BossEnemy)]):
+            e.draw_health_bar(screen, idx)
+
+        pistejarjestelma.show_score(10, 10, pygame.font.SysFont('Arial', 24), screen)
+
+        font = pygame.font.SysFont('Arial', 24)
+        try:
+            cur_health = lives
+            max_h = 5
+            if hasattr(player, 'health'):
+                cur_health = int(max(0, min(player.health, getattr(player, 'max_health', 5))))
+                max_h = int(getattr(player, 'max_health', 5))
+
+            hud_img = None
+            if isinstance(health_imgs, dict):
+                if max_h > 0 and max_h != 5:
+                    slot = int(round((cur_health / max_h) * 5))
+                else:
+                    slot = int(max(0, min(cur_health, 5)))
+                hud_img = health_imgs.get(slot)
+
+            if hud_img:
+                screen.blit(hud_img, HEALTH_ICON_POS)
+            else:
+                lives_text = font.render(f"Elamat: {cur_health}", True, (255, 255, 255))
+                screen.blit(lives_text, (X - 200, 10))
+        except Exception:
+            lives_text = font.render(f"Elamat: {lives}", True, (255, 255, 255))
+            screen.blit(lives_text, (X - 200, 10))
+
+
+_game_instance = None
+
+
+def init():
+    global _game_instance
+    if _game_instance is None:
+        _game_instance = Game()
+
+
+def update(events):
+    if _game_instance is None:
+        init()
+    _game_instance.update(events)
+
+
+def draw(target_screen):
+    if _game_instance is None:
+        init()
+    _game_instance.draw(target_screen)
+
+
+def is_running():
+    if _game_instance is None:
+        return True
+    return _game_instance.running

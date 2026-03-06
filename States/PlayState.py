@@ -2,15 +2,14 @@ from States.GameState import GameState
 import RocketGame
 
 class PlayState(GameState):
-
     def __init__(self, manager):
         super().__init__(manager)
-
-        # käynnistä peli
-        self.game = RocketGame.Game()
+        RocketGame.init()
 
     def update(self, events):
-        self.game.update(events)
+        RocketGame.update(events)
+        if not RocketGame.is_running():
+            self.manager.running = False
 
     def draw(self, screen):
-        self.game.draw(screen)
+        RocketGame.draw(screen)
