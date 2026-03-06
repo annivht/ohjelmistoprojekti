@@ -24,6 +24,276 @@ from ui import init_enemy_health_bars
 import planets
 
 from GameStateManager import GameStateManager
+# Näytön koko
+X, Y = 1600, 800
+HEALTH_ICON_SIZE = (600, 200)
+HEALTH_ICON_MARGIN = 16
+max_w = max(1, X - 2 * HEALTH_ICON_MARGIN)
+max_h = max(1, Y - 2 * HEALTH_ICON_MARGIN)
+scale = min(max_w / HEALTH_ICON_SIZE[0], max_h / HEALTH_ICON_SIZE[1], 1.0)
+HEALTH_ICON_SCALE_SIZE = (max(1, int(HEALTH_ICON_SIZE[0]*scale)), max(1, int(HEALTH_ICON_SIZE[1]*scale)))
+HEALTH_ICON_POS = (X - HEALTH_ICON_SCALE_SIZE[0] - HEALTH_ICON_MARGIN, HEALTH_ICON_MARGIN)
+
+# Hitbox-koko per tyyppi
+HITBOX_SIZE_PLAYER = (64, 64)
+HITBOX_SIZE_ENEMY = (48, 48)
+HITBOX_SIZE_BOSS = (140, 140)
+
+
+def apply_hitbox(obj, size=None):
+    """Asettaa objektin hitboxin ja collision_radiusin"""
+    if size is None:
+        return
+    c = obj.rect.center
+    w, h = int(size[0]), int(size[1])
+    obj.rect.size = (w, h)
+    obj.rect.center = c
+    if hasattr(obj, 'pos'):
+        obj.pos = pygame.Vector2(obj.rect.center)
+    try:
+        obj.collision_radius = max(8, int(max(obj.rect.width, obj.rect.height)*0.45))
+    except Exception:
+        pass
+
+
+class Game:
+    """Modulaarinen RocketGame-luokka, ohjattavissa PlayState kautta"""
+
+    def __init__(self, screen):
+        self.screen = screen
+        self.dt = 0
+        self.camera_x = 0
+        self.camera_y = 0
+        self.running = True
+        self.pause = False
+
+        # Peliobjektit
+        self.player = None
+        self.enemies = []
+        self.enemy_bullets = []
+        self.muzzles = []
+        self.boss = None
+        self.current_wave = 1
+        self.MAX_WAVE = 4
+        self.wave_cleared = False
+        self.boss_clear_menu_delay_remaining = None
+        self.lives = 3
+        self.enemy_hit_cooldown = 0
+        self.enemy_hit_cooldown_duration = 1000
+        self.pistejarjestelma = None
+
+        # Pygame-resurssit
+        self.clock = pygame.time.Clock()
+        self.explosion_manager = ExplosionManager()
+        self.spatial_hash = SpatialHash()
+        self.collisions = set()
+        self.DEBUG_DRAW_COLLISIONS = True
+        self.USE_SPATIAL_COLLISIONS = True
+
+        # Lataa tausta ja planeetat
+        self._load_assets()
+
+        # Alusta pelaaja ja ensimmäinen wave
+        self.init_game_objects()
+
+    def _load_assets(self):
+        """Lataa tausta, vihollisten kuvat ja planeetat"""
+        base_path = os.path.dirname(__file__)
+        self.tausta = pygame.image.load(os.path.join(base_path,'images','taustat','avaruus.png')).convert()
+        self.tausta = pygame.transform.scale(self.tausta, (X, Y))
+        self.tausta_leveys, self.tausta_korkeus = self.tausta.get_width(), self.tausta.get_height()
+
+        # Lataa vihollisten kuvat
+        viholliset_path = os.path.join(base_path, "images", "viholliset")
+        self.enemy_imgs = [
+            pygame.transform.scale(
+                pygame.image.load(os.path.join(viholliset_path, f)).convert_alpha(),
+                (64, 64)
+            )
+            for f in sorted([fn for fn in os.listdir(viholliset_path) if fn.lower().endswith(".png")],
+                            key=lambda name: int(os.path.splitext(name)[0]))
+        ]
+
+        # SpriteSettings vihollisille
+        self.ss = SpriteSettings(base_path=os.path.join(base_path, 'enemy-sprite'))
+        self.ss.load_all()
+
+        # Boss kuva
+        self.boss_image = pygame.transform.scale(
+            pygame.image.load(os.path.join(viholliset_path, "12.png")).convert_alpha(),
+            (320, 320)
+        )
+
+        # Planeetat
+        self.planeetat = [
+            pygame.transform.scale(pygame.image.load(f"images/planeetat/slice{i}.png"), (100,100))
+            for i in range(2,11)
+        ]
+        self.planeetta_paikat = [
+            (random.randint(0, max(0,self.tausta_leveys-300)),
+             random.randint(0, max(0,self.tausta_korkeus-300)))
+            for _ in range(len(self.planeetat))
+        ]
+
+    def init_game_objects(self):
+        """Alusta pelaaja, pistejärjestelmä ja ensimmäinen wave"""
+        self.pistejarjestelma = Points()
+
+        player_ship = 'FIGHTER'
+        player_start_x = self.tausta_leveys // 2
+        player_start_y = self.tausta_korkeus // 2
+        player_scale_factor = 1
+
+        try:
+            self.player = Player2(player_ship, player_scale_factor, player_start_x, player_start_y, max_health=5)
+        except Exception:
+            self.player = Player(player_scale_factor, [], player_start_x, player_start_y, boost_frames=[], max_health=5)
+
+        apply_hitbox(self.player, HITBOX_SIZE_PLAYER)
+        self.spawn_wave(self.current_wave)
+
+    def reset_game(self):
+        """Resettaa pelin tilan ja pelaajan"""
+        self.current_wave = 1
+        self.wave_cleared = False
+        self.boss_clear_menu_delay_remaining = None
+        self.enemies.clear()
+        self.enemy_bullets.clear()
+        self.muzzles.clear()
+        self.collisions.clear()
+        self.player.health = getattr(self.player, 'max_health', 5)
+        self.lives = self.player.health
+        self.spawn_wave(self.current_wave)
+        self.pistejarjestelma = Points()
+        pygame.event.clear()
+
+    def spawn_wave(self, wave_num):
+        """Spawnaa viholliset wave-numeroon perustuen"""
+        self.enemies.clear()
+        if wave_num == 1:
+            e1 = StraightEnemy(self.enemy_imgs[0], 200, 200, speed=220)
+            e2 = CircleEnemy(self.enemy_imgs[1], self.tausta_leveys//2+300, self.tausta_korkeus//2, radius=180, angular_speed=2.2)
+            for e in [e1, e2]:
+                apply_hitbox(e, HITBOX_SIZE_ENEMY)
+                self.enemies.append(e)
+        elif wave_num == 4:
+            self.boss = BossEnemy(self.boss_image, pygame.Rect(0,0,self.tausta_leveys,self.tausta_korkeus),
+                                   hp=12, enter_speed=280, move_speed=320, hitbox_size=HITBOX_SIZE_BOSS, hitbox_offset=(0,0))
+            apply_hitbox(self.boss, HITBOX_SIZE_BOSS)
+            self.enemies.append(self.boss)
+
+        # Muut wavet voidaan lisätä samalla logiikalla
+
+    def update(self, events):
+        """Päivitä pelilogiikka: pelaaja, viholliset, ammukset, collisionit jne."""
+        self.dt = self.clock.tick(60)
+
+        # Päivitä planeetat ja pelaaja
+        planets.update_planet(self.dt)
+        self.player.update(self.dt)
+        self.player.move(0,0,self.tausta_leveys,self.tausta_korkeus)
+
+        # Kamera pelaajan ympärillä
+        self.camera_x = max(0, min(self.player.rect.centerx - X//2, self.tausta_leveys - X))
+        self.camera_y = max(0, min(self.player.rect.centery - Y//2, self.tausta_korkeus - Y))
+
+        # Päivitä viholliset
+        for e in self.enemies:
+            e.update(self.dt, self.player, pygame.Rect(0,0,self.tausta_leveys,self.tausta_korkeus))
+            if isinstance(e, BossEnemy):
+                e.maybe_shoot(self.dt, {'bullets': self.enemy_bullets, 'muzzles': self.muzzles}, player=self.player)
+            else:
+                e.maybe_shoot(self.dt, {'bullets': self.enemy_bullets, 'muzzles': self.muzzles})
+
+        # Ammukset
+        for bullet in list(self.player.weapons.bullets):
+            for enemy in list(self.enemies):
+                if bullet.rect.colliderect(enemy.rect):
+                    impact_pos = bullet.rect.center
+                    self.player.weapons.bullets.remove(bullet)
+                    if isinstance(enemy, BossEnemy):
+                        died = enemy.take_hit(1)
+                        if died:
+                            self.explosion_manager.spawn_boss(enemy.rect.center, fps=24)
+                            self.enemies.remove(enemy)
+                            self.pistejarjestelma.lisaa_piste(5)
+                        else:
+                            self.explosion_manager.spawn_enemy(impact_pos, fps=24)
+                    else:
+                        self.explosion_manager.spawn_enemy(impact_pos, fps=24)
+                        self.enemies.remove(enemy)
+                        self.pistejarjestelma.lisaa_piste(1)
+                    break
+
+        for b in list(self.enemy_bullets):
+            b.update(self.dt, pygame.Rect(0,0,self.tausta_leveys,self.tausta_korkeus))
+            if getattr(b,'dead',False):
+                self.enemy_bullets.remove(b)
+            elif getattr(b,'state','')=='flight' and b.rect.colliderect(self.player.rect):
+                b.explode()
+                self.enemy_bullets.remove(b)
+                self.player.health = max(0, self.player.health-1)
+                self.lives = self.player.health
+
+        # Räjähdykset
+        self.explosion_manager.update(self.dt)
+
+    def draw(self, target_screen):
+        """Piirrä kaikki peliobjektit annettuun ruutuun"""
+        self.screen = target_screen
+        self.screen.blit(self.tausta, (0,0), area=(self.camera_x, self.camera_y, X, Y))
+
+        for kuva, (x, y) in zip(self.planeetat, self.planeetta_paikat):
+            self.screen.blit(kuva, (x - self.camera_x, y - self.camera_y))
+
+        for e in self.enemies:
+            e.draw(self.screen, self.camera_x, self.camera_y)
+
+        for b in self.enemy_bullets:
+            b.draw(self.screen, self.camera_x, self.camera_y)
+
+        for m in self.muzzles:
+            m.draw(self.screen, self.camera_x, self.camera_y)
+
+        self.player.draw(self.screen, self.camera_x, self.camera_y)
+        self.explosion_manager.draw(self.screen, self.camera_x, self.camera_y)
+
+        self.pistejarjestelma.show_score(10,10, pygame.font.SysFont('Arial',24), self.screen)
+
+
+# Compatibility bridge for old function-style callers.
+_active_game = None
+
+
+def init(screen):
+    """Initialize a single active Game instance for legacy callers."""
+    global _active_game
+    _active_game = Game(screen)
+    return _active_game
+
+
+def update(events):
+    """Update active Game instance if initialized."""
+    if _active_game is not None:
+        _active_game.update(events)
+
+
+def draw(screen):
+    """Draw active Game instance if initialized."""
+    if _active_game is not None:
+        _active_game.draw(screen)
+
+
+def is_running():
+    """Return whether active Game instance is running."""
+    return _active_game is not None and bool(_active_game.running)
+
+
+def get_active_game():
+    """Expose active game for code that still needs direct access."""
+    return _active_game
+
+"""
 
 # Keep backward compatibility: running `py RocketGame.py` should now start
 # through the new state system (main menu first) instead of this legacy loop.
@@ -70,13 +340,6 @@ HITBOX_SIZE_BOSS = (140, 140)
 
 
 def apply_hitbox(obj, size=None):
-    """Apply a hitbox `size=(w,h)` to object's rect while preserving center.
-
-    - `size` overrides the per-type globals when provided.
-    - If `size` is None, the function will do nothing.
-    - The function also synchronizes a `pos` attribute (if present) and
-      updates `collision_radius` based on the new rect dimensions.
-    """
     if size is None:
         return
     try:
@@ -167,7 +430,7 @@ if os.path.isdir(alukset_alus):
             break
 
 if player_folder:
-    player_frames = ExplosionManager.load_frames(folder=player_folder, size=(220, 220), pattern=r"(.*)\.png")
+    player_frames = ExplosionManager.load_frames(folder=player_folder, size=(220, 220), pattern=r"(.*)\\.png")
     if player_frames:
         explosion_manager.set_frames_for('player', player_frames)
 
@@ -286,7 +549,6 @@ def spawn_inside_edge(edge, inset=80):
     return random.randint(inset, tausta_leveys - inset), random.randint(inset, tausta_korkeus - inset)
 
 def spawn_wave(wave_num):
-    """Spawns enemies based on the wave number"""
     global enemies
     enemies.clear()
     
@@ -1051,213 +1313,9 @@ while ENABLE_LEGACY_LOOP and run:
     explosion_manager.update(dt)
     explosion_manager.draw(screen, camera_x, camera_y)
     pygame.display.update()
-    
 
-if ENABLE_LEGACY_LOOP:
-    pygame.quit()
-
-
-class Game:
-    """State-driven runtime: updated and drawn by PlayState."""
-
-    def __init__(self):
-        self.running = True
-        self.pause = False
-        self.camera_x = 0
-        self.camera_y = 0
-        self.dt = 0
-
-    def update(self, events):
-        global lives, enemy_hit_cooldown, current_wave, boss_clear_menu_delay_remaining
-
-        for event in events:
-            if event.type == pygame.QUIT:
-                self.running = False
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                self.pause = True
-
-        self.dt = clock.tick(60)
-        planets.update_planet(self.dt)
-
-        player.update(self.dt)
-        player.move(0, 0, tausta_leveys, tausta_korkeus)
-
-        self.camera_x = max(0, min(player.rect.centerx - X // 2, tausta_leveys - X))
-        self.camera_y = max(0, min(player.rect.centery - Y // 2, tausta_korkeus - Y))
-
-        for e in enemies:
-            e.update(self.dt, player, world_rect)
-            if isinstance(e, BossEnemy):
-                e.maybe_shoot(self.dt, {'bullets': enemy_bullets, 'muzzles': muzzles}, player=player)
-            else:
-                e.maybe_shoot(self.dt, {'bullets': enemy_bullets, 'muzzles': muzzles})
-
-        for bullet in list(player.weapons.bullets):
-            for enemy in list(enemies):
-                if not bullet.rect.colliderect(enemy.rect):
-                    continue
-
-                impact_pos = bullet.rect.center
-                if bullet in player.weapons.bullets:
-                    player.weapons.bullets.remove(bullet)
-
-                if isinstance(enemy, BossEnemy):
-                    died = enemy.take_hit(1)
-                    if died:
-                        if explosion_manager.frames_by_type.get('boss'):
-                            explosion_manager.spawn_boss(enemy.rect.center, fps=24)
-                        elif explosion_manager.frames:
-                            explosion_manager.spawn(enemy.rect.center, fps=24)
-                        enemies.remove(enemy)
-                        pistejarjestelma.lisaa_piste(5)
-                    else:
-                        if explosion_manager.frames_by_type.get('enemy'):
-                            explosion_manager.spawn_enemy(impact_pos, fps=24)
-                        elif explosion_manager.frames:
-                            explosion_manager.spawn(impact_pos, fps=24)
-                else:
-                    if explosion_manager.frames_by_type.get('enemy'):
-                        explosion_manager.spawn_enemy(impact_pos, fps=24)
-                    elif explosion_manager.frames:
-                        explosion_manager.spawn(impact_pos, fps=24)
-                    enemies.remove(enemy)
-                    pistejarjestelma.lisaa_piste(1)
-
-                break
-
-        for b in list(enemy_bullets):
-            b.update(self.dt, world_rect)
-            if getattr(b, 'dead', False):
-                enemy_bullets.remove(b)
-                continue
-            if getattr(b, 'state', '') == 'flight' and b.rect.colliderect(player.rect):
-                b.explode()
-                enemy_bullets.remove(b)
-                if hasattr(player, 'health'):
-                    player.health = max(0, int(player.health) - 1)
-                    lives = player.health
-                    try:
-                        if hasattr(player, 'trigger_hit_animation'):
-                            player.trigger_hit_animation()
-                    except Exception:
-                        pass
-                else:
-                    lives -= 1
-
-        for m in list(muzzles):
-            m.update(self.dt)
-            if getattr(m, 'dead', False):
-                muzzles.remove(m)
-
-        if enemy_hit_cooldown > 0:
-            enemy_hit_cooldown -= self.dt
-
-        if len(enemies) == 0 and current_wave < MAX_WAVE:
-            boss_clear_menu_delay_remaining = None
-            current_wave += 1
-            spawn_wave(current_wave)
-
-        if lives <= 0:
-            game_over_screen.show(X, Y)
-            game_over = game_over_screen.run()
-            if game_over == "play_again":
-                reset_game()
-            elif game_over in ("main_menu", "quit"):
-                self.running = False
-
-        if self.pause:
-            from Valikot.PauseMenu import PauseMenu
-
-            pause_menu = PauseMenu()
-            action = pause_menu.run(screen.copy())
-            if action == "quit":
-                self.running = False
-            self.pause = False
-
-        explosion_manager.update(self.dt)
-
-    def draw(self, target_screen):
-        global screen
-        screen = target_screen
-
-        screen.blit(tausta, (0, 0), area=(self.camera_x, self.camera_y, X, Y))
-
-        try:
-            big_h = max(800, int(Y * 1.4))
-            center_x = X + (big_h // 4)
-            center_y = Y // 2
-            planets.draw_planet_screen(screen, center_x, center_y, height=big_h, gap=0)
-        except Exception:
-            pass
-
-        for kuva, (x, y) in zip(planeetat, planeetta_paikat):
-            screen.blit(kuva, (x - self.camera_x, y - self.camera_y))
-
-        for e in enemies:
-            e.draw(screen, self.camera_x, self.camera_y)
-
-        for b in enemy_bullets:
-            b.draw(screen, self.camera_x, self.camera_y)
-
-        for m in muzzles:
-            m.draw(screen, self.camera_x, self.camera_y)
-
-        player.draw(screen, self.camera_x, self.camera_y)
-        explosion_manager.draw(screen, self.camera_x, self.camera_y)
-
-        for idx, e in enumerate([be for be in enemies if isinstance(be, BossEnemy)]):
-            e.draw_health_bar(screen, idx)
-
-        pistejarjestelma.show_score(10, 10, pygame.font.SysFont('Arial', 24), screen)
-
-        font = pygame.font.SysFont('Arial', 24)
-        try:
-            cur_health = lives
-            max_h = 5
-            if hasattr(player, 'health'):
-                cur_health = int(max(0, min(player.health, getattr(player, 'max_health', 5))))
-                max_h = int(getattr(player, 'max_health', 5))
-
-            hud_img = None
-            if isinstance(health_imgs, dict):
-                if max_h > 0 and max_h != 5:
-                    slot = int(round((cur_health / max_h) * 5))
-                else:
-                    slot = int(max(0, min(cur_health, 5)))
-                hud_img = health_imgs.get(slot)
-
-            if hud_img:
-                screen.blit(hud_img, HEALTH_ICON_POS)
-            else:
-                lives_text = font.render(f"Elamat: {cur_health}", True, (255, 255, 255))
-                screen.blit(lives_text, (X - 200, 10))
-        except Exception:
-            lives_text = font.render(f"Elamat: {lives}", True, (255, 255, 255))
-            screen.blit(lives_text, (X - 200, 10))
-
-
-_game_instance = None
-
-
-def init():
-    global _game_instance
-    if _game_instance is None:
-        _game_instance = Game()
-
-
-def update(events):
-    if _game_instance is None:
-        init()
-    _game_instance.update(events)
-
-
-def draw(target_screen):
-    if _game_instance is None:
-        init()
-    _game_instance.draw(target_screen)
-
-
-def is_running():
-    if _game_instance is None:
-        return True
-    return _game_instance.running
+Legacy loop snapshot.
+Current integration path:
+- State system creates `Game` directly (see States/PlayState.py)
+- Old function-style calls use wrappers: `init/update/draw/is_running`
+"""

@@ -4,12 +4,12 @@ import RocketGame
 class PlayState(GameState):
     def __init__(self, manager):
         super().__init__(manager)
-        RocketGame.init()
+        self.game = RocketGame.Game(manager.screen)
 
     def update(self, events):
-        RocketGame.update(events)
-        if not RocketGame.is_running():
+        self.game.update(events)
+        if not self.game.running:
             self.manager.running = False
 
     def draw(self, screen):
-        RocketGame.draw(screen)
+        self.game.draw(screen)
