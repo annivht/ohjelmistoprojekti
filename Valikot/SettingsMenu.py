@@ -1,6 +1,6 @@
 import pygame
 #------------------------------------------------------
-#Asennus: pip install pygame_menu
+#Asennus: pip install pygame-menu
 #------------------------------------------------------
 
 
