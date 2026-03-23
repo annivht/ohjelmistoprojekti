@@ -23,6 +23,7 @@ from explosion import ExplosionManager
 from Collision.collisions import SpatialHash, apply_impact, separate, _get_pos, get_collision_radius
 from ui import init_enemy_health_bars, draw_hud
 import planets
+from Meteor.meteor import Meteor
 from Tasot.Taso1 import spawn_wave_taso1
 # Import other level wave-spawn functions as they're created
 try:
@@ -96,6 +97,7 @@ class Game:
         self.enemies = []
         self.enemy_bullets = []
         self.muzzles = []
+        self.meteors = []  # Static meteor obstacles
         self.boss = None
         self.current_wave = 1
         self.MAX_WAVE = 4  # Each level has up to 4 waves (1-3 normal, 4 = boss)
@@ -235,6 +237,7 @@ class Game:
         self.enemies.clear()
         self.enemy_bullets.clear()
         self.muzzles.clear()
+        self.meteors.clear()
         self.collisions.clear()
         self.player.health = getattr(self.player, 'max_health', 5)
         if hasattr(self.player, 'is_destroyed'):
@@ -309,6 +312,12 @@ class Game:
             else:
                 e.maybe_shoot(self.dt, {'bullets': self.enemy_bullets, 'muzzles': self.muzzles})
 
+        # Päivitä meteorit ja poista ruudun läpi menneet
+        for meteor in list(self.meteors):
+            meteor.update(self.dt)
+            if getattr(meteor, 'dead', False):
+                self.meteors.remove(meteor)
+
         # Ammukset
         for bullet in list(self.player.weapons.bullets):
             for enemy in list(self.enemies):
@@ -371,6 +380,51 @@ class Game:
                 except Exception:
                     pass
 
+        # Meteor collision handling
+        # Player vs meteors: player loses health on collision
+        meteor_hit_cooldown = getattr(self, '_meteor_hit_cooldown', 0)
+        if meteor_hit_cooldown <= 0 and self.lives > 0 and self.player_death_menu_delay_remaining is None:
+            for meteor in self.meteors:
+                if self.player.rect.colliderect(meteor.rect):
+                    self.player.health = max(0, self.player.health - 1)
+                    self.lives = self.player.health
+                    try:
+                        if hasattr(self.player, 'trigger_hit_animation'):
+                            self.player.trigger_hit_animation()
+                    except Exception:
+                        pass
+                    
+                    # Apply knockback to player
+                    player_center = pygame.Vector2(self.player.rect.center)
+                    meteor_center = pygame.Vector2(meteor.rect.center)
+                    direction = player_center - meteor_center
+                    if direction.length_squared() == 0:
+                        direction = pygame.Vector2(1, 0)
+                    else:
+                        direction = direction.normalize()
+                    
+                    if hasattr(self.player, "vel"):
+                        self.player.vel = direction * 420
+                    
+                    if hasattr(self.player, "collision_bounce_locked"):
+                        self.player.collision_bounce_locked = True
+                        self.player.collision_bounce_timer = 0.18
+                    
+                    self._meteor_hit_cooldown = self.enemy_hit_cooldown_duration
+                    break
+        
+        if meteor_hit_cooldown > 0:
+            self._meteor_hit_cooldown = max(0, meteor_hit_cooldown - self.dt)
+        
+        # Player bullets vs meteors: bullets pass through (no damage to meteors)
+        # Meteors are invulnerable, so bullets just pass through them
+        for meteor in self.meteors:
+            for bullet in list(self.player.weapons.bullets):
+                if bullet.rect.colliderect(meteor.rect):
+                    # Remove bullet that hits meteor
+                    if bullet in self.player.weapons.bullets:
+                        self.player.weapons.bullets.remove(bullet)
+
         # Kontakti-osuma vihollisen ja pelaajan välillä cooldownilla.
         if self.enemy_hit_cooldown <= 0 and self.lives > 0 and self.player_death_menu_delay_remaining is None:
             for enemy in self.enemies:
@@ -412,7 +466,8 @@ class Game:
         
 
         # Wave progression: wave 1 -> 2 -> 3 -> boss (4).
-        if len(self.enemies) == 0 and not self.level_completed and self.lives > 0:
+        # A wave is clear only when both enemies and meteors are gone.
+        if len(self.enemies) == 0 and len(self.meteors) == 0 and not self.level_completed and self.lives > 0:
             if self.current_wave < self.MAX_WAVE:
                 self.current_wave += 1
                 self.enemy_bullets.clear()
@@ -482,6 +537,9 @@ class Game:
 
         for kuva, (x, y) in zip(self.planeetat, self.planeetta_paikat):
             self.screen.blit(kuva, (x - self.camera_x, y - self.camera_y))
+
+        for meteor in self.meteors:
+            meteor.draw(self.screen, self.camera_x, self.camera_y)
 
         for e in self.enemies:
             e.draw(self.screen, self.camera_x, self.camera_y)

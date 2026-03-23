@@ -143,6 +143,7 @@ def spawn_wave_taso1(
 			_set_enemy_hp(enemy, 1)
 			apply_hitbox(enemy, hitbox_enemy)
 			game.enemies.append(enemy)
+		
 		return True
 
 	if wave_num == 4:
