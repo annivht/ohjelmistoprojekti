@@ -30,6 +30,9 @@ class MainMenuState(GameState):
                 if settings_action == "start_test_level":
                     test_level_manager = LevelManager(self.manager.screen, level_numbers=[0])
                     self.manager.set_state(PlayState(self.manager, level_manager=test_level_manager))
+                elif settings_action == "start_test2_level":
+                    test_level_manager = LevelManager(self.manager.screen, level_numbers=[6])
+                    self.manager.set_state(PlayState(self.manager, level_manager=test_level_manager))
             except Exception as exc:
                 print(f"Could not open settings menu: {exc}")
 

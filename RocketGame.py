@@ -52,6 +52,10 @@ try:
     from Tasot.TestLevel import spawn_wave_test
 except ImportError:
     spawn_wave_test = None
+try:
+    from Tasot.TestLevel2 import spawn_wave_test2
+except ImportError:
+    spawn_wave_test2 = None
 
 from States.GameStateManager import GameStateManager
 # Näytön koko
@@ -97,6 +101,7 @@ class Game:
         self.screen = screen
         self.level_number = level_number  # Track which level this instance manages (1-5)
         self.is_test_level = int(level_number) == 0
+        self.is_test2_level = int(level_number) == 6
         self.dt = 0
         self.camera_x = 0
         self.camera_y = 0
@@ -112,7 +117,7 @@ class Game:
         self.hazard_system = None
         self.boss = None
         self.current_wave = 1
-        self.MAX_WAVE = 1 if self.is_test_level else 4  # Test level has one persistent wave.
+        self.MAX_WAVE = 1 if (self.is_test_level or self.is_test2_level) else 4  # Test levels are persistent.
         self.wave_cleared = False
         self.boss_clear_menu_delay_remaining = None
         self.player_death_menu_delay_remaining = None
@@ -129,6 +134,7 @@ class Game:
         self._boss_storm_hide_remaining_ms = 0
         self._boss_storm_spawn_timer_ms = 0
         self._boss_storm_spawn_interval_ms = 260
+        self._test2_shower_cd_ms = 0
         self.pistejarjestelma = None
         self.leaderboard = Leaderboard()
         try:
@@ -195,6 +201,49 @@ class Game:
                 },
             )
             # Keep legacy access working for existing code that uses self.meteors.
+            self.meteors = self.hazard_system.meteors
+        elif self.is_test2_level:
+            self.hazard_system = HazardSystem(
+                world_size=(self.tausta_leveys, self.tausta_korkeus),
+                sprite_root=os.path.join(self.base_path, "images", "Space-Shooter_objects"),
+                config={
+                    "enabled": True,
+                    "fuse_seconds": 2.8,
+                    "warning_seconds": 1.0,
+                    "bomb_radius": 145.0,
+                    "bomb_damage": 1,
+                    "bomb_family": "2",
+                    "bomb_sprite_size": 64,
+                    "meteor_spawn_rate": 9999.0,
+                    "max_active_meteors": 26,
+                    "enemy_drop_chance": 0.18,
+                    "enemy_drop_cooldown": 1.0,
+                    "pickup_drop_chance": 0.08,
+                    "boss_drop_interval_min": 4.8,
+                    "boss_drop_interval_max": 7.2,
+                    "shockwave_max_radius_mult": 1.45,
+                    "shockwave_speed": 410.0,
+                    "shockwave_band": 42.0,
+                    "shockwave_push": 430.0,
+                },
+            )
+            self.meteors = self.hazard_system.meteors
+        elif int(self.level_number) == 3:
+            # Level 3 uses the same meteor visuals/physics family as test level,
+            # but keeps hazards meteor-only (no bomb/pickup gameplay there).
+            self.hazard_system = HazardSystem(
+                world_size=(self.tausta_leveys, self.tausta_korkeus),
+                sprite_root=os.path.join(self.base_path, "images", "Space-Shooter_objects"),
+                config={
+                    "enabled": True,
+                    "meteor_spawn_rate": 9999.0,
+                    "max_active_meteors": 40,
+                    "enemy_drop_chance": 0.0,
+                    "pickup_drop_chance": 0.0,
+                    "boss_drop_interval_min": 9999.0,
+                    "boss_drop_interval_max": 9999.0,
+                },
+            )
             self.meteors = self.hazard_system.meteors
 
         # Alusta pelaaja ja ensimmäinen wave
@@ -426,6 +475,53 @@ class Game:
     def _start_enemy_calm_period(self):
         self.enemy_calm_timer_ms = max(self.enemy_calm_timer_ms, self.enemy_calm_duration_ms)
 
+    def _update_test2_meteor_showers(self, dt_ms):
+        if not self.is_test2_level or self.hazard_system is None:
+            return
+
+        self._test2_shower_cd_ms -= int(dt_ms)
+        if self._test2_shower_cd_ms > 0:
+            return
+
+        self._test2_shower_cd_ms = random.randint(3600, 5600)
+
+        burst_count = random.randint(3, 6)
+        for _ in range(burst_count):
+            x = random.uniform(32, max(33, self.tausta_leveys - 32))
+            y = random.uniform(-170, -70)
+            vx = random.uniform(-70.0, 70.0)
+            vy = random.uniform(240.0, 360.0)
+            tier = random.choices([1, 2, 3], weights=[0.55, 0.35, 0.10], k=1)[0]
+            self.hazard_system.spawn_meteor(tier=tier, center=(x, y), velocity=(vx, vy))
+
+    def _ensure_boss_bomb_hazards(self):
+        """Enable boss bomb drops on normal levels without enabling meteor hazards."""
+        if self.hazard_system is not None:
+            return
+        if self.is_test_level or int(self.level_number) == 3:
+            return
+
+        has_boss = any(isinstance(e, BossEnemy) for e in self.enemies)
+        if not has_boss:
+            return
+
+        self.hazard_system = HazardSystem(
+            world_size=(self.tausta_leveys, self.tausta_korkeus),
+            sprite_root=os.path.join(self.base_path, "images", "Space-Shooter_objects"),
+            config={
+                "enabled": True,
+                "meteor_spawn_rate": 9999.0,
+                "max_active_meteors": 0,
+                "enemy_drop_chance": 0.0,
+                "pickup_drop_chance": 0.0,
+                "boss_drop_interval_min": 3.1,
+                "boss_drop_interval_max": 4.8,
+                "bomb_radius": 140.0,
+                "bomb_damage": 1,
+                "bomb_sprite_size": 58,
+            },
+        )
+
     def _start_boss_storm_phase(self):
         if not self.is_test_level or self.hazard_system is None or self.boss is None:
             return
@@ -637,6 +733,8 @@ class Game:
         spawn_func = None
         if self.level_number == 0 and spawn_wave_test:
             spawn_func = spawn_wave_test
+        elif self.level_number == 6 and spawn_wave_test2:
+            spawn_func = spawn_wave_test2
         elif self.level_number == 1:
             spawn_func = spawn_wave_taso1
         elif self.level_number == 2 and spawn_wave_taso2:
@@ -688,6 +786,8 @@ class Game:
 
         self.player.move(0,0,self.tausta_leveys,self.tausta_korkeus)
         self._update_boss_storm_phase(self.dt)
+        self._update_test2_meteor_showers(self.dt)
+        self._ensure_boss_bomb_hazards()
 
         if self.enemy_calm_timer_ms > 0:
             self.enemy_calm_timer_ms = max(0, self.enemy_calm_timer_ms - self.dt)
@@ -882,6 +982,43 @@ class Game:
             for m_pos in hazard_effects.get("meteor_destroyed_positions", []):
                 self.explosion_manager.spawn_enemy(m_pos, fps=20)
 
+            # Test2 mode: falling meteors also sweep enemies on contact.
+            if self.is_test2_level:
+                for meteor in list(self.meteors):
+                    for enemy in list(self.enemies):
+                        if not meteor.rect.colliderect(enemy.rect):
+                            continue
+
+                        if isinstance(enemy, BossEnemy):
+                            hit_cd = int(getattr(enemy, "_meteor_contact_cd_ms", 0))
+                            if hit_cd > 0:
+                                continue
+                            enemy._meteor_contact_cd_ms = 360
+                            died = enemy.take_hit(1)
+                            self.explosion_manager.spawn_hit(enemy.rect.center, fps=22)
+                            if died and enemy in self.enemies:
+                                self.explosion_manager.spawn_boss(enemy.rect.center, fps=20)
+                                if self.hazard_system is not None:
+                                    self.hazard_system.on_enemy_destroyed(enemy, is_boss=True)
+                                self.enemies.remove(enemy)
+                                self.pistejarjestelma.lisaa_piste(5)
+                        else:
+                            self.explosion_manager.spawn_enemy(enemy.rect.center, fps=20)
+                            if enemy in self.enemies:
+                                if self.hazard_system is not None:
+                                    self.hazard_system.on_enemy_destroyed(enemy, is_boss=False)
+                                self.enemies.remove(enemy)
+                                self.pistejarjestelma.lisaa_piste(1)
+
+                        if meteor in self.meteors:
+                            self.meteors.remove(meteor)
+                            self.meteors.extend(meteor.split_children())
+                        break
+
+                for enemy in self.enemies:
+                    if isinstance(enemy, BossEnemy):
+                        enemy._meteor_contact_cd_ms = max(0, int(getattr(enemy, "_meteor_contact_cd_ms", 0)) - int(self.dt))
+
             # Shockwave ring pushes nearby entities in an outward wavefront.
             self._apply_shockwaves_from_hazards(hazard_effects.get("shockwaves", []))
 
@@ -938,7 +1075,7 @@ class Game:
 
         # Wave progression: wave 1 -> 2 -> 3 -> boss (4).
         # A wave is clear only when both enemies and meteors are gone.
-        if (not self.is_test_level) and len(self.enemies) == 0 and len(self.meteors) == 0 and not self.level_completed and self.lives > 0:
+        if (not self.is_test_level) and (not self.is_test2_level) and len(self.enemies) == 0 and len(self.meteors) == 0 and not self.level_completed and self.lives > 0:
             if self.current_wave < self.MAX_WAVE:
                 self.current_wave += 1
                 self.enemy_bullets.clear()

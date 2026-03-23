@@ -197,6 +197,11 @@ def main():
         selected_action = "start_test_level"
         done = True
 
+    def start_hazard_test2_level():
+        nonlocal done, selected_action
+        selected_action = "start_test2_level"
+        done = True
+
     def print_general_settings():
         print("\n\nGeneral settings:")
         data = general_menu.get_input_data()
@@ -207,6 +212,7 @@ def main():
     settings.add.button("General Settings", general_menu)
     settings.add.button("Physics Settings", physics_menu)
     settings.add.button("Start Hazard Test Level", start_hazard_test_level)
+    settings.add.button("Start Hazard Test2 Level", start_hazard_test2_level)
     settings.add.button("Return To Main Menu", exit_settings)
 
     # General settings page
