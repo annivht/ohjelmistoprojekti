@@ -1,4 +1,5 @@
 import pygame
+import os
 
 SCREEN_WIDTH = 1600
 SCREEN_HEIGHT = 800
@@ -94,6 +95,20 @@ class MainMenu:
             ),
         ]
 
+        # Menu backdrop: draw scene-like background and translucent veil
+        # instead of a flat solid color.
+        self.background_image = None
+        try:
+            project_root = os.path.dirname(os.path.dirname(__file__))
+            bg_path = os.path.join(project_root, "images", "taustat", "avaruus.png")
+            bg = pygame.image.load(bg_path).convert()
+            self.background_image = pygame.transform.scale(bg, (SCREEN_WIDTH, SCREEN_HEIGHT))
+        except Exception:
+            self.background_image = None
+
+        self.overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        self.overlay.fill((0, 0, 0, 120))
+
     def handle_events(self, events):
         """Handle a frame's events and return selected action or None."""
         for event in events:
@@ -105,7 +120,11 @@ class MainMenu:
         return None
 
     def draw(self, surface):
-        surface.fill(DARK_BLUE)
+        if self.background_image is not None:
+            surface.blit(self.background_image, (0, 0))
+        else:
+            surface.fill(DARK_BLUE)
+        surface.blit(self.overlay, (0, 0))
 
         title_surface = title_font.render("ROCKET GAME", True, WHITE)
         title_rect = title_surface.get_rect(center=(SCREEN_WIDTH // 2, 180))

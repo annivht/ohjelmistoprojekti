@@ -12,6 +12,8 @@ from Physics.core import RigidBody
 from Physics.forces import Force, Gravity, Drag, Magnetism, Thrust
 from Physics.animation import DampedOscillator
 from Physics.presets import ENEMY_PRESETS, create_enemy_physics
+from Physics.box2d_config import PHYSICS_PROFILES, PhysicsProfile, get_physics_profile
+from Physics.box2d_world import Box2DPhysicsWorld, CollisionCategory
 
 __all__ = [
     'RigidBody',
@@ -23,4 +25,9 @@ __all__ = [
     'DampedOscillator',
     'ENEMY_PRESETS',
     'create_enemy_physics',
+    'PHYSICS_PROFILES',
+    'PhysicsProfile',
+    'get_physics_profile',
+    'Box2DPhysicsWorld',
+    'CollisionCategory',
 ]

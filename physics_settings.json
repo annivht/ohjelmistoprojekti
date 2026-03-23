@@ -1,0 +1,6 @@
+{
+  "sprite_angle_offset_deg": 0.0,
+  "speed_multiplier": 1.35,
+  "turn_multiplier": 0.7,
+  "physics_profile": "balanced"
+}

@@ -7,6 +7,8 @@ Uses: EnemyHelpers for specific explosion spawn when needed
 
 import sys
 import os
+import time
+from types import SimpleNamespace
 from Enemies import enemy
 import pygame
 import random
@@ -22,6 +24,8 @@ from SpriteSettings import SpriteSettings
 from explosion import ExplosionManager
 from Collision.collisions import SpatialHash, apply_impact, separate, _get_pos, get_collision_radius
 from ui import init_enemy_health_bars, draw_hud
+from Physics.box2d_world import Box2DPhysicsWorld, CollisionCategory
+from physics_settings import load_physics_settings
 import planets
 from Meteor.meteor import Meteor
 from Tasot.Taso1 import spawn_wave_taso1
@@ -108,7 +112,10 @@ class Game:
         self.game_over = False
         self.lives = 3
         self.enemy_hit_cooldown = 0
-        self.enemy_hit_cooldown_duration = 1000
+        self.enemy_hit_cooldown_duration = 1400
+        self.enemy_calm_timer_ms = 0
+        self.enemy_calm_duration_ms = 2400
+        self.enemy_calm_shoot_scale = 0.45
         self.pistejarjestelma = None
         self.leaderboard = Leaderboard()
         try:
@@ -123,6 +130,27 @@ class Game:
         self.collisions = set()
         self.DEBUG_DRAW_COLLISIONS = True
         self.USE_SPATIAL_COLLISIONS = True
+        self.physics_world = None
+        self.physics_metrics = {
+            'physics_step_ms': 0.0,
+            'substeps': 0,
+            'contacts': 0,
+            'profile': 'disabled',
+            'fixed_dt': 0.0,
+            'frame_ms': 0.0,
+        }
+        self.show_physics_stats = True
+        self.physics_font = pygame.font.SysFont('Consolas', 16)
+        self.user_physics_settings = load_physics_settings()
+        env_profile = os.environ.get('RG_PHYSICS_PROFILE', '').strip().lower()
+        self.physics_profile_name = env_profile or str(self.user_physics_settings.get('physics_profile', 'balanced')).strip().lower() or 'balanced'
+
+        try:
+            self.physics_world = Box2DPhysicsWorld(profile_name=self.physics_profile_name)
+            self.physics_metrics['profile'] = self.physics_profile_name
+            self.physics_metrics['fixed_dt'] = self.physics_world.fixed_dt
+        except Exception:
+            self.physics_world = None
 
         # Lataa tausta ja planeetat
         self._load_assets()
@@ -223,8 +251,92 @@ class Game:
             self.player.destroyed_anim_speed = PLAYER_DESTROYED_FRAME_MS
 
         apply_hitbox(self.player, HITBOX_SIZE_PLAYER)
+        self._init_player_physics()
         self.lives = int(getattr(self.player, 'health', getattr(self.player, 'max_health', 5)))
         self.spawn_wave(self.current_wave)
+
+    def _init_player_physics(self):
+        if self.physics_world is None or self.player is None:
+            return
+
+        old_body = self.physics_world.get_body(self.player)
+        if old_body is not None:
+            self.physics_world.remove_entity(self.player)
+
+        radius = max(8, int(getattr(self.player, 'collision_radius', 24)))
+        body = self.physics_world.add_circle_body(
+            self.player,
+            radius_px=radius,
+            mass=1.8,
+            dynamic=True,
+            bullet=False,
+            category=CollisionCategory.PLAYER,
+            mask=(CollisionCategory.ENEMY | CollisionCategory.METEOR | CollisionCategory.SENSOR),
+        )
+        speed_mul = float(self.user_physics_settings.get('speed_multiplier', 1.0))
+        turn_mul = float(self.user_physics_settings.get('turn_multiplier', 1.0))
+        base_profile = self.physics_world.profile
+        body.profile = SimpleNamespace(
+            name=base_profile.name,
+            linear_damping=base_profile.linear_damping,
+            angular_damping=base_profile.angular_damping,
+            thrust_force=base_profile.thrust_force * speed_mul,
+            turn_torque=base_profile.turn_torque * turn_mul,
+            max_speed_mps=base_profile.max_speed_mps * speed_mul,
+            brake_impulse=base_profile.brake_impulse * speed_mul,
+            lateral_drift_damping=base_profile.lateral_drift_damping,
+        )
+
+        self.player.sprite_angle_offset_deg = float(self.user_physics_settings.get('sprite_angle_offset_deg', 0.0))
+        self.physics_metrics['profile'] = f"{self.physics_profile_name} xS{speed_mul:.2f} xT{turn_mul:.2f}"
+        self.player.bind_box2d_body(body)
+
+    def _apply_player_knockback(self, direction, speed_px_per_s, blend_with_current=0.55):
+        knockback = pygame.Vector2(direction) * float(speed_px_per_s)
+        current = pygame.Vector2(getattr(self.player, 'vel', pygame.Vector2(0, 0)))
+        blend = max(0.0, min(1.0, float(blend_with_current)))
+        final_vel = current * blend + knockback * (1.0 - blend)
+
+        if hasattr(self.player, 'vel'):
+            self.player.vel = final_vel
+
+        if self.physics_world is not None:
+            body = self.physics_world.get_body(self.player)
+            if body is not None:
+                body.linearVelocity = (
+                    float(final_vel.x) / self.physics_world.PPM,
+                    float(final_vel.y) / self.physics_world.PPM,
+                )
+
+    def _start_enemy_calm_period(self):
+        self.enemy_calm_timer_ms = max(self.enemy_calm_timer_ms, self.enemy_calm_duration_ms)
+
+    def _calm_nearby_enemies(self, center, radius_px=260.0, cooldown_seconds=1.8):
+        c = pygame.Vector2(center)
+        r2 = float(radius_px) * float(radius_px)
+        for enemy in self.enemies:
+            try:
+                d2 = (pygame.Vector2(enemy.rect.center) - c).length_squared()
+            except Exception:
+                continue
+            if d2 <= r2 and hasattr(enemy, 'hit_player_cooldown'):
+                enemy.hit_player_cooldown = max(float(getattr(enemy, 'hit_player_cooldown', 0.0)), float(cooldown_seconds))
+
+    def _draw_physics_overlay(self, screen):
+        if not self.show_physics_stats:
+            return
+        lines = [
+            f"Physics profile: {self.physics_metrics.get('profile', 'n/a')}",
+            f"Frame ms: {self.physics_metrics.get('frame_ms', 0.0):5.2f}",
+            f"Physics ms: {self.physics_metrics.get('physics_step_ms', 0.0):5.2f}",
+            f"Substeps: {self.physics_metrics.get('substeps', 0)}",
+            f"Contacts: {self.physics_metrics.get('contacts', 0)}",
+        ]
+        y = 10
+        for line in lines:
+            surf = self.physics_font.render(line, True, (220, 230, 255))
+            screen.blit(surf, (10, y))
+            y += 18
 
     def reset_game(self):
         """Resettaa pelin tilan ja pelaajan"""
@@ -293,12 +405,21 @@ class Game:
 
     def update(self, events):
         """Päivitä pelilogiikka: pelaaja, viholliset, ammukset, collisionit jne."""
+        frame_start = time.perf_counter()
         self.dt = self.clock.tick(60)
 
         # Päivitä planeetat ja pelaaja
         planets.update_planet(self.dt)
         self.player.update(self.dt)
+
+        if self.physics_world is not None:
+            self.physics_world.step(self.dt / 1000.0)
+            self.physics_metrics.update(self.physics_world.get_metrics())
+
         self.player.move(0,0,self.tausta_leveys,self.tausta_korkeus)
+
+        if self.enemy_calm_timer_ms > 0:
+            self.enemy_calm_timer_ms = max(0, self.enemy_calm_timer_ms - self.dt)
 
         # Kamera pelaajan ympärillä
         self.camera_x = max(0, min(self.player.rect.centerx - X//2, self.tausta_leveys - X))
@@ -307,10 +428,13 @@ class Game:
         # Päivitä viholliset
         for e in self.enemies:
             e.update(self.dt, self.player, pygame.Rect(0,0,self.tausta_leveys,self.tausta_korkeus))
+            shoot_dt = self.dt
+            if self.enemy_calm_timer_ms > 0:
+                shoot_dt = self.dt * self.enemy_calm_shoot_scale
             if isinstance(e, BossEnemy):
-                e.maybe_shoot(self.dt, {'bullets': self.enemy_bullets, 'muzzles': self.muzzles}, player=self.player)
+                e.maybe_shoot(shoot_dt, {'bullets': self.enemy_bullets, 'muzzles': self.muzzles}, player=self.player)
             else:
-                e.maybe_shoot(self.dt, {'bullets': self.enemy_bullets, 'muzzles': self.muzzles})
+                e.maybe_shoot(shoot_dt, {'bullets': self.enemy_bullets, 'muzzles': self.muzzles})
 
         # Päivitä meteorit ja poista ruudun läpi menneet
         for meteor in list(self.meteors):
@@ -403,8 +527,7 @@ class Game:
                     else:
                         direction = direction.normalize()
                     
-                    if hasattr(self.player, "vel"):
-                        self.player.vel = direction * 420
+                    self._apply_player_knockback(direction, 360)
                     
                     if hasattr(self.player, "collision_bounce_locked"):
                         self.player.collision_bounce_locked = True
@@ -448,16 +571,25 @@ class Game:
                         direction = direction.normalize()
 
                 # Smooth knockback pelaajalle
-                    if hasattr(self.player, "vel"):
-                        self.player.vel = direction * 420
+                    self._apply_player_knockback(direction, 320)
 
                 # Lukitse ohjaus hetkeksi, jotta knockback ehtii näkyä
                     if hasattr(self.player, "collision_bounce_locked"):
                         self.player.collision_bounce_locked = True
-                        self.player.collision_bounce_timer = 0.18
+                        self.player.collision_bounce_timer = 0.22
                     # estä vihollista jahtaamasta heti takaisin
                     if hasattr(enemy, "hit_player_cooldown"):
-                        enemy.hit_player_cooldown = 8
+                        enemy.hit_player_cooldown = 2.5
+
+                    # Non-boss enemies explode on collision to prevent instant chain hits.
+                    if not isinstance(enemy, BossEnemy):
+                        self.explosion_manager.spawn_enemy(enemy.rect.center, fps=22)
+                        if enemy in self.enemies:
+                            self.enemies.remove(enemy)
+                            self.pistejarjestelma.lisaa_piste(1)
+
+                    self._start_enemy_calm_period()
+                    self._calm_nearby_enemies(self.player.rect.center)
 
                     self.enemy_hit_cooldown = self.enemy_hit_cooldown_duration
                     break
@@ -530,6 +662,8 @@ class Game:
                 self.game_over = True
                 self.running = False
 
+        self.physics_metrics['frame_ms'] = (time.perf_counter() - frame_start) * 1000.0
+
     def draw(self, target_screen):
         """Piirrä kaikki peliobjektit annettuun ruutuun"""
         self.screen = target_screen
@@ -559,6 +693,7 @@ class Game:
 
         self.pistejarjestelma.show_score(10,10, pygame.font.SysFont('Arial',24), self.screen)
         draw_hud(self.screen, X, Y, self.player, self.lives, self.health_imgs, HEALTH_ICON_POS)
+        self._draw_physics_overlay(self.screen)
 
 
 # Compatibility bridge for old function-style callers.

@@ -108,8 +108,14 @@ class PauseMenu:
     def draw(self, background_surface=None):
         """Piirtää pausemenun"""
         screen = self.screen if self.screen is not None else pygame.display.get_surface()
-        if background_surface is not None:
-            screen.blit(background_surface, (0, 0))
+        if background_surface is not None and isinstance(background_surface, pygame.Surface):
+            try:
+                screen.blit(background_surface, (0, 0))
+            except Exception:
+                # Fall back to a solid fill if the cached background surface is stale.
+                screen.fill(DARK_BLUE)
+        else:
+            screen.fill(DARK_BLUE)
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         overlay.set_alpha(128)
         overlay.fill(BLACK)

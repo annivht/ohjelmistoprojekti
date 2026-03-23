@@ -1,6 +1,7 @@
 import os
 import pygame
 import math
+from Box2D import b2Vec2
 from PLAYER_LUOKAT.PlayerInput import PlayerInput
 from PLAYER_LUOKAT.PlayerWeapons import PlayerWeapons
 
@@ -236,9 +237,14 @@ class Player2(pygame.sprite.Sprite):
         self.pos = pygame.math.Vector2(x, y)
         self.vel = pygame.math.Vector2(0, 0)
         self.angle = 0.0
+        # Keep this explicit so we can align sprite nose with physics forward.
+        # 0.0 means old behavior (forward = cos(angle), sin(angle)).
+        self.sprite_angle_offset_deg = 0.0
+        self.box2d_body = None
         self.collision_bounce_locked = False
         self.collision_bounce_timer = 0.0
         self.collision_bounce_duration = 0.18
+        self.collision_bounce_damping = 7.5
 
         # Default collision radius (can be adjusted externally)
         try:
@@ -265,6 +271,8 @@ class Player2(pygame.sprite.Sprite):
 
         # Debug: näytä spriten ja rectin keskikohdat + offset (aseta False poistaaksesi)
         self.show_center_debug = False
+        self.show_physics_debug_vectors = True
+        self._debug_font = pygame.font.SysFont('Consolas', 14)
 
         # attack frames (jos niitä ei löytynyt aiemmin, varmistetaan kentät)
         self.attack_frames = getattr(self, 'attack_frames', [])
@@ -288,6 +296,9 @@ class Player2(pygame.sprite.Sprite):
 
 
 
+    def bind_box2d_body(self, body):
+        self.box2d_body = body
+
     def update(self, dt):
         if self.is_destroyed:
             self.update_destroyed_animation(dt)
@@ -302,15 +313,22 @@ class Player2(pygame.sprite.Sprite):
         if getattr(self, 'collision_bounce_locked', False):
             dt_s = dt / 1000.0
 
+            damping = max(0.0, float(getattr(self, 'collision_bounce_damping', 7.5)))
+            if damping > 0.0:
+                decay = max(0.0, min(1.0, 1.0 - damping * dt_s))
+                self.vel *= decay
+
             self.collision_bounce_timer -= dt_s
             if self.collision_bounce_timer <= 0:
                 self.collision_bounce_locked = False
                 self.collision_bounce_timer = 0
-                self.vel = pygame.Vector2(0, 0)   # STOP floattaus
 
             # liu'u knockbackin mukana
             self.pos += self.vel * dt_s
             self.rect.center = (int(self.pos.x), int(self.pos.y))
+            if self.box2d_body is not None:
+                self.box2d_body.position = b2Vec2(self.pos.x / 30.0, self.pos.y / 30.0)
+                self.box2d_body.linearVelocity = (self.vel.x / 30.0, self.vel.y / 30.0)
         else:
             self.handle_movement(dt)
 
@@ -472,6 +490,10 @@ class Player2(pygame.sprite.Sprite):
 
     def handle_movement(self, dt):
         dt_s = dt / 1000.0
+        if self.box2d_body is not None:
+            self._apply_box2d_movement(dt_s)
+            return
+
         if self.input.turnLeft:
             self.angle += 180.0 * dt_s
         if self.input.turnRight:
@@ -493,6 +515,70 @@ class Player2(pygame.sprite.Sprite):
                     self.vel.scale_to_length(new_speed)
         self.pos += self.vel * dt_s
         self.rect.center = (int(self.pos.x), int(self.pos.y))
+
+    def _apply_box2d_movement(self, dt_s):
+        body = self.box2d_body
+        if body is None:
+            return
+
+        profile = getattr(body, "profile", None)
+        thrust_force = float(getattr(profile, "thrust_force", 15.0))
+        turn_torque = float(getattr(profile, "turn_torque", 6.0))
+        brake_impulse = float(getattr(profile, "brake_impulse", 2.6))
+        max_speed = float(getattr(profile, "max_speed_mps", 11.5))
+        lateral_damping = float(getattr(profile, "lateral_drift_damping", 2.0))
+
+        turn_input = 0.0
+        if self.input.turnLeft:
+            turn_input -= 1.0
+        if self.input.turnRight:
+            turn_input += 1.0
+
+        # Smoothly approach target turn speed with a hard cap so a short tap
+        # cannot cause an exaggerated instant rotation.
+        max_turn_rate = math.radians(220.0)  # rad/s
+        commanded_turn_rate = max(-max_turn_rate, min(max_turn_rate, turn_torque))
+        target_ang_vel = turn_input * commanded_turn_rate
+        response = 10.0
+        blend = max(0.0, min(1.0, response * dt_s))
+        body.angularVelocity = body.angularVelocity + (target_ang_vel - body.angularVelocity) * blend
+
+        if turn_input == 0.0 and abs(body.angularVelocity) < 0.02:
+            body.angularVelocity = 0.0
+
+        if self.input.moveUp:
+            forward = self._get_forward_screen_vector()
+            body.ApplyForceToCenter((forward.x * thrust_force, forward.y * thrust_force), True)
+
+        if self.input.moveDown:
+            current_v = pygame.Vector2(body.linearVelocity.x, body.linearVelocity.y)
+            if current_v.length_squared() > 1e-8:
+                brake_dir = -current_v.normalize()
+                body.ApplyLinearImpulse((brake_dir.x * brake_impulse, brake_dir.y * brake_impulse), body.worldCenter, True)
+
+        lv = body.linearVelocity
+        v = pygame.Vector2(lv.x, lv.y)
+        if v.length_squared() > 1e-6:
+            forward = self._get_forward_screen_vector()
+            longitudinal = forward * v.dot(forward)
+            lateral = v - longitudinal
+            if lateral.length_squared() > 1e-6:
+                anti_drift_impulse = -lateral * (lateral_damping * dt_s)
+                body.ApplyLinearImpulse((anti_drift_impulse.x, anti_drift_impulse.y), body.worldCenter, True)
+
+        lv = body.linearVelocity
+        speed = (lv.x * lv.x + lv.y * lv.y) ** 0.5
+        if speed > max_speed > 0.0:
+            scale = max_speed / speed
+            body.linearVelocity = (lv.x * scale, lv.y * scale)
+
+    def _get_forward_screen_vector(self):
+        heading_deg = self.angle + self.sprite_angle_offset_deg
+        heading_rad = math.radians(heading_deg)
+        v = pygame.Vector2(math.cos(heading_rad), math.sin(heading_rad))
+        if v.length_squared() <= 1e-8:
+            return pygame.Vector2(1.0, 0.0)
+        return v.normalize()
 
 
 
@@ -527,6 +613,22 @@ class Player2(pygame.sprite.Sprite):
         # synkataan pos uudelleen rajoituksen jälkeen
         self.pos.x = self.rect.centerx
         self.pos.y = self.rect.centery
+
+        if self.box2d_body is not None:
+            self.box2d_body.position = b2Vec2(self.pos.x / 30.0, self.pos.y / 30.0)
+            lv = self.box2d_body.linearVelocity
+            vx, vy = lv.x, lv.y
+            at_left = self.rect.x <= 0
+            at_right = self.rect.x >= world_w - self.rect.width
+            at_top = self.rect.y <= 0
+            at_bottom = self.rect.y >= world_h - self.rect.height
+
+            # Only remove velocity that pushes further out of bounds.
+            if (at_left and vx < 0.0) or (at_right and vx > 0.0):
+                vx = 0.0
+            if (at_top and vy < 0.0) or (at_bottom and vy > 0.0):
+                vy = 0.0
+            self.box2d_body.linearVelocity = (vx, vy)
 
     def draw(self, screen, cam_x, cam_y):
         if self.is_destroyed and self.destroyed_frames:
@@ -591,6 +693,25 @@ class Player2(pygame.sprite.Sprite):
 
         for bullet in self.weapons.bullets:
             screen.blit(bullet.image, (bullet.rect.x - cam_x, bullet.rect.y - cam_y))
+
+        if self.show_physics_debug_vectors:
+            center = pygame.Vector2(base_center)
+            forward = self._get_forward_screen_vector()
+            pygame.draw.line(screen, (90, 255, 120), center, center + forward * 80, 3)
+
+            vel = pygame.Vector2(self.vel)
+            if vel.length_squared() > 1e-5:
+                vel_dir = vel.normalize()
+                vel_len = min(100.0, max(20.0, vel.length() * 0.1))
+                pygame.draw.line(screen, (90, 180, 255), center, center + vel_dir * vel_len, 3)
+
+            heading_diff = 0.0
+            speed = vel.length()
+            if speed > 1e-5:
+                heading_diff = forward.angle_to(vel)
+            debug_text = f"ang:{self.angle:6.1f} off:{self.sprite_angle_offset_deg:+5.1f} spd:{speed:6.1f} hdg_err:{heading_diff:+6.1f}"
+            text_surf = self._debug_font.render(debug_text, True, (240, 240, 240))
+            screen.blit(text_surf, (base_center[0] - 120, base_center[1] - 52))
 
         # attack overlay removed — attack frames are now applied to `self.image`
     def trigger_hit_animation(self):

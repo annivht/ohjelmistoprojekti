@@ -40,6 +40,19 @@ class LevelManager:
         self.game_over = False
         self.all_levels_completed = False
 
+    def _prime_level_timing(self, level):
+        """Reset timing after level activation to avoid large first-frame dt."""
+        try:
+            level.clock.tick(60)
+        except Exception:
+            pass
+
+        try:
+            if level.physics_world is not None:
+                level.physics_world.accumulator = 0.0
+        except Exception:
+            pass
+
     def next_level(self):
         """Advance to next level.
 
@@ -53,6 +66,7 @@ class LevelManager:
         if self.current_level_index < self.num_levels - 1:
             self.current_level_index += 1
             self.current_level = self.levels[self.current_level_index]
+            self._prime_level_timing(self.current_level)
 
         # Näytä uuden tason pisteinä tähän asti kerätty yhteissaldo
             if hasattr(self.current_level, "pistejarjestelma"):
@@ -86,3 +100,4 @@ class LevelManager:
     def reset_current_level(self):
         """Reset current level to initial state."""
         self.current_level.reset_game()
+        self._prime_level_timing(self.current_level)
