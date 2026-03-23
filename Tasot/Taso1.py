@@ -5,6 +5,7 @@ Sisaltaa wave 1-3 vihollisaallot ja boss-wave (wave 4).
 
 import pygame
 import random
+from Meteor.meteor_helpers import spawn_meteor, spawn_meteors_in_line
 
 def _set_enemy_hp(enemy, hp):
 	enemy.hp = hp
@@ -121,6 +122,14 @@ def spawn_wave_taso1(
 			apply_hitbox(enemy, hitbox_enemy)
 			game.enemies.append(enemy)
 		
+		# Add meteors to wave 2 - diagonal line formation
+		spawn_meteors_in_line(
+			game,
+			game.tausta_leveys * 0.2, game.tausta_korkeus * 0.3,
+			game.tausta_leveys * 0.8, game.tausta_korkeus * 0.7,
+			4
+		)
+		
 		return True
 
 	if wave_num == 3:
@@ -143,6 +152,21 @@ def spawn_wave_taso1(
 			_set_enemy_hp(enemy, 1)
 			apply_hitbox(enemy, hitbox_enemy)
 			game.enemies.append(enemy)
+		
+		# Add meteors to wave 3 - grid formation in the middle area
+		spawn_meteors_in_line(
+			game,
+			game.tausta_leveys * 0.1, game.tausta_korkeus * 0.2,
+			game.tausta_leveys * 0.9, game.tausta_korkeus * 0.2,
+			5
+		)
+		spawn_meteors_in_line(
+			game,
+			game.tausta_leveys * 0.1, game.tausta_korkeus * 0.5,
+			game.tausta_leveys * 0.9, game.tausta_korkeus * 0.5,
+			5
+		)
+		
 		return True
 
 	if wave_num == 4:
