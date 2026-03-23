@@ -7,6 +7,7 @@ class GameOverState(GameState):
 
     def __init__(self, manager):
         super().__init__(manager)
+        self.background_surface = manager.screen.copy()
         self.game_over_screen = GameOverScreen(manager.screen)
 
     def update(self, events):
@@ -33,4 +34,4 @@ class GameOverState(GameState):
 
     def draw(self, screen):
         w, h = screen.get_size()
-        self.game_over_screen.show(w, h, overlay=False)
+        self.game_over_screen.show(w, h, overlay=True, background_surface=self.background_surface)

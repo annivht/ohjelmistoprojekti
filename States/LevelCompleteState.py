@@ -1,7 +1,20 @@
 import pygame
-from States.GameState import GameState
-from States.MainMenuState import MainMenuState
-from Valikot.NextLevel import NextLevel
+
+try:
+    from States.GameState import GameState
+    from States.MainMenuState import MainMenuState
+    from Valikot.NextLevel import NextLevel
+except ModuleNotFoundError:
+    import os
+    import sys
+
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+
+    from States.GameState import GameState
+    from States.MainMenuState import MainMenuState
+    from Valikot.NextLevel import NextLevel
 
 
 class LevelCompleteState(GameState):
@@ -9,6 +22,7 @@ class LevelCompleteState(GameState):
     def __init__(self, manager, level_manager=None):
         super().__init__(manager)
         self.level_manager = level_manager
+        self.background_surface = manager.screen.copy()
         
         # Get current level number from manager, if available
         current_level = 1 if not level_manager else level_manager.get_current_level_number()
@@ -21,12 +35,10 @@ class LevelCompleteState(GameState):
             display_current_level=current_level,
             display_next_level=next_level,
             screen=manager.screen,
+            background_surface=self.background_surface,
         )
 
-    def update(self, events):
-        action = self.next_level_menu.handle_events_from(events)
-        result = self.next_level_menu.resolve_action(action)
-
+    def _handle_result(self, result):
         if isinstance(result, int):
             # Next level selected
             if self.level_manager:
@@ -35,20 +47,20 @@ class LevelCompleteState(GameState):
                     # Continue with next level
                     from States.PlayState import PlayState
                     self.manager.set_state(PlayState(self.manager, level_manager=self.level_manager))
-                    return
+                    return True
                 else:
                     # All levels completed
                     self.manager.set_state(MainMenuState(self.manager))
-                    return
+                    return True
             else:
                 # Fallback: restart PlayState if no level manager
                 from States.PlayState import PlayState
                 self.manager.set_state(PlayState(self.manager))
-                return
+                return True
 
         if result == "game_completed":
             self.manager.set_state(MainMenuState(self.manager))
-            return
+            return True
 
         if result == "settings":
             try:
@@ -56,15 +68,31 @@ class LevelCompleteState(GameState):
                 settings_menu_main()
             except Exception as exc:
                 print(f"Could not open settings menu: {exc}")
-            return
+            return True
 
         if result == "quit":
             self.manager.running = False
+            return True
+
+        return False
+
+    def update(self, events):
+        action = self.next_level_menu.handle_events_from(events)
+        result = self.next_level_menu.resolve_action(action)
+
+        if self._handle_result(result):
             return
 
         for event in events:
-            if event.type == pygame.KEYDOWN:
-                self.manager.set_state(MainMenuState(self.manager))
+            # Accept only SPACE or left click as quick continue input.
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                quick_result = self.next_level_menu.resolve_action("next_level")
+                self._handle_result(quick_result)
+                return
+
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                quick_result = self.next_level_menu.resolve_action("next_level")
+                self._handle_result(quick_result)
                 return
 
     def draw(self, screen):

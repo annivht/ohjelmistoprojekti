@@ -1,4 +1,5 @@
 import pygame
+from Valikot.menu_style import draw_dim_overlay, draw_menu_panel
 
 from physics_settings import (
     DEFAULT_PHYSICS_SETTINGS,
@@ -25,6 +26,11 @@ CYAN = (0, 100, 100)
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
+THEME_BG = (20, 44, 68, 205)
+THEME_TITLE_BG = (34, 82, 126, 230)
+THEME_TEXT = (240, 247, 255)
+THEME_SELECTION = (188, 221, 255)
+
 
 def main():
     try:
@@ -42,12 +48,21 @@ def main():
 
     # Pause-style translucent backdrop: frozen frame + dark alpha overlay.
     frozen_bg = screen.copy()
-    overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 128))
 
     def draw_translucent_bg():
         screen.blit(frozen_bg, (0, 0))
-        screen.blit(overlay, (0, 0))
+        draw_dim_overlay(screen)
+
+    menu_theme = pm.themes.THEME_DARK.copy()
+    menu_theme.background_color = THEME_BG
+    menu_theme.title_background_color = THEME_TITLE_BG
+    menu_theme.title_font_color = THEME_TEXT
+    menu_theme.widget_font_color = THEME_TEXT
+    menu_theme.selection_color = THEME_SELECTION
+    menu_theme.widget_font_size = 25
+    menu_theme.widget_alignment = pm.locals.ALIGN_CENTER
+    menu_theme.title_font_size = 46
+    menu_theme.widget_padding = 10
 
     physics_data = load_physics_settings()
     preset_selector = None
@@ -150,30 +165,23 @@ def main():
         title="Settings",
         width=WIDTH,
         height=HEIGHT,
-        theme=pm.themes.THEME_GREEN,
+        theme=menu_theme,
     )
-    settings._theme.widget_font_size = 25
-    settings._theme.widget_font_color = BLACK
-    settings._theme.widget_alignment = pm.locals.ALIGN_CENTER
 
     general_menu = pm.Menu(
         title="General Settings",
         width=WIDTH,
         height=HEIGHT,
-        theme=pm.themes.THEME_GREEN,
+        theme=menu_theme,
     )
-    general_menu._theme.widget_font_size = 25
-    general_menu._theme.widget_font_color = BLACK
     general_menu._theme.widget_alignment = pm.locals.ALIGN_LEFT
 
     physics_menu = pm.Menu(
         title="Physics Settings",
         width=WIDTH,
         height=HEIGHT,
-        theme=pm.themes.THEME_GREEN,
+        theme=menu_theme,
     )
-    physics_menu._theme.widget_font_size = 25
-    physics_menu._theme.widget_font_color = BLACK
     physics_menu._theme.widget_alignment = pm.locals.ALIGN_LEFT
 
     done = False
@@ -330,6 +338,14 @@ def _fallback_settings_screen():
     title_font = pygame.font.Font(None, 72)
     info_font = pygame.font.Font(None, 40)
     hint_font = pygame.font.Font(None, 32)
+    panel_width = min(900, screen.get_width() - 120)
+    panel_height = min(460, screen.get_height() - 120)
+    panel_rect = pygame.Rect(
+        screen.get_width() // 2 - panel_width // 2,
+        screen.get_height() // 2 - panel_height // 2,
+        panel_width,
+        panel_height,
+    )
 
     clock = pygame.time.Clock()
     running = True
@@ -344,14 +360,16 @@ def _fallback_settings_screen():
                 running = False
 
         screen.fill((22, 28, 40))
+        draw_dim_overlay(screen)
+        draw_menu_panel(screen, panel_rect, "SETTINGS", "Configuration")
 
         title = title_font.render("SETTINGS", True, (240, 240, 240))
         info = info_font.render("pygame_menu is not installed.", True, (210, 210, 210))
         hint = hint_font.render("Press ESC, Enter, or click to return.", True, (170, 190, 220))
 
-        screen.blit(title, title.get_rect(center=(screen.get_width() // 2, 220)))
-        screen.blit(info, info.get_rect(center=(screen.get_width() // 2, 340)))
-        screen.blit(hint, hint.get_rect(center=(screen.get_width() // 2, 410)))
+        screen.blit(title, title.get_rect(center=(screen.get_width() // 2, panel_rect.top + 70)))
+        screen.blit(info, info.get_rect(center=(screen.get_width() // 2, panel_rect.top + 190)))
+        screen.blit(hint, hint.get_rect(center=(screen.get_width() // 2, panel_rect.top + 260)))
 
         pygame.display.flip()
         clock.tick(60)

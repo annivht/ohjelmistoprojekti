@@ -1,54 +1,17 @@
 import pygame
+from Valikot.menu_style import MenuButton, draw_dim_overlay, draw_menu_panel
 
 # Näytön asetukset
 SCREEN_WIDTH = 1600
 SCREEN_HEIGHT = 800
 
-# Värit
-WHITE = (255, 255, 255)
 DARK_BLUE = (52, 78, 91)
-LIGHT_BLUE = (100, 150, 200)
-HOVER_COLOR = (150, 200, 255)
-
-# Fontit
-title_font = None
-button_font = None
-small_font = None
-
-
-class Button:
-	"""Nappi-luokka seuraavan tason valikolle"""
-
-	def __init__(self, x, y, width, height, text, color, text_color, action=None):
-		self.rect = pygame.Rect(x, y, width, height)
-		self.text = text
-		self.color = color
-		self.text_color = text_color
-		self.action = action
-		self.is_hovered = False
-
-	def draw(self, surface):
-		current_color = HOVER_COLOR if self.is_hovered else self.color
-		pygame.draw.rect(surface, current_color, self.rect, border_radius=10)
-		pygame.draw.rect(surface, WHITE, self.rect, 3, border_radius=10)
-
-		text_surf = button_font.render(self.text, True, self.text_color)
-		text_rect = text_surf.get_rect(center=self.rect.center)
-		surface.blit(text_surf, text_rect)
-
-	def is_clicked(self, pos):
-		return self.rect.collidepoint(pos)
-
-	def update(self, pos):
-		self.is_hovered = self.rect.collidepoint(pos)
 
 
 class NextLevel:
 	"""Seuraavan tason valikon hallinta"""
 
-	def __init__(self, current_level=1, max_level=None, display_current_level=None, display_next_level=None, screen=None):
-		global title_font, button_font, small_font
-
+	def __init__(self, current_level=1, max_level=None, display_current_level=None, display_next_level=None, screen=None, background_surface=None):
 		if not pygame.get_init():
 			pygame.init()
 		if not pygame.display.get_init():
@@ -61,9 +24,15 @@ class NextLevel:
 			self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 			pygame.display.set_caption("Rocket Game - Next Level")
 
-		title_font = pygame.font.Font(None, 80)
-		button_font = pygame.font.Font(None, 50)
-		small_font = pygame.font.Font(None, 34)
+		self.background_surface = background_surface
+		panel_width = 760
+		panel_height = 560
+		self.panel_rect = pygame.Rect(
+			SCREEN_WIDTH // 2 - panel_width // 2,
+			SCREEN_HEIGHT // 2 - panel_height // 2,
+			panel_width,
+			panel_height,
+		)
 
 		self.current_level = int(current_level)
 		self.max_level = max_level
@@ -71,10 +40,17 @@ class NextLevel:
 		self.display_current_level = self.current_level if display_current_level is None else int(display_current_level)
 		self.display_next_level = self.next_level if display_next_level is None else int(display_next_level)
 
+		button_width = 300
+		button_height = 78
+		button_spacing = 22
+		total_height = 3 * button_height + 2 * button_spacing
+		start_y = self.panel_rect.top + 220 + (self.panel_rect.height - 290 - total_height) // 2
+		center_x = SCREEN_WIDTH // 2 - button_width // 2
+
 		self.buttons = [
-			Button(SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 - 100, 300, 80, "NEXT LEVEL", LIGHT_BLUE, WHITE, action="next_level"),
-			Button(SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 + 20, 300, 80, "SETTINGS", LIGHT_BLUE, WHITE, action="settings"),
-			Button(SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 + 140, 300, 80, "QUIT", LIGHT_BLUE, WHITE, action="quit"),
+			MenuButton(center_x, start_y, button_width, button_height, "NEXT LEVEL", action="next_level", variant="success"),
+			MenuButton(center_x, start_y + button_height + button_spacing, button_width, button_height, "SETTINGS", action="settings"),
+			MenuButton(center_x, start_y + 2 * (button_height + button_spacing), button_width, button_height, "QUIT", action="quit", variant="danger"),
 		]
 		self.clock = pygame.time.Clock()
 		self.running = True
@@ -108,19 +84,21 @@ class NextLevel:
 
 	def draw(self, surface=None):
 		target = self.screen if surface is None else surface
-		target.fill(DARK_BLUE)
+		if self.background_surface is not None:
+			try:
+				target.blit(self.background_surface, (0, 0))
+			except Exception:
+				target.fill(DARK_BLUE)
+		else:
+			target.fill(DARK_BLUE)
 
-		title_surf = title_font.render("LEVEL COMPLETE", True, WHITE)
-		title_rect = title_surf.get_rect(center=(SCREEN_WIDTH // 2, 100))
-		target.blit(title_surf, title_rect)
-
-		level_line = small_font.render(
-			f"Current Level: {self.display_current_level}   Next Level: {self.display_next_level}",
-			True,
-			WHITE,
+		draw_dim_overlay(target)
+		draw_menu_panel(
+			target,
+			self.panel_rect,
+			"LEVEL COMPLETE",
+			f"Current: {self.display_current_level}   Next: {self.display_next_level}",
 		)
-		level_rect = level_line.get_rect(center=(SCREEN_WIDTH // 2, 180))
-		target.blit(level_line, level_rect)
 
 		mouse_pos = pygame.mouse.get_pos()
 		for button in self.buttons:

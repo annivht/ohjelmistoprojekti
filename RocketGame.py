@@ -129,6 +129,7 @@ class Game:
         self.spatial_hash = SpatialHash()
         self.collisions = set()
         self.DEBUG_DRAW_COLLISIONS = True
+        self.DEBUG_DRAW_ENEMY_FACING = os.environ.get('RG_DEBUG_ENEMY_FACING', '0').strip() in ('1', 'true', 'True', 'yes', 'on')
         self.USE_SPATIAL_COLLISIONS = True
         self.physics_world = None
         self.physics_metrics = {
@@ -141,6 +142,7 @@ class Game:
         }
         self.show_physics_stats = True
         self.physics_font = pygame.font.SysFont('Consolas', 16)
+        self.enemy_debug_font = pygame.font.SysFont('Consolas', 14)
         self.user_physics_settings = load_physics_settings()
         env_profile = os.environ.get('RG_PHYSICS_PROFILE', '').strip().lower()
         self.physics_profile_name = env_profile or str(self.user_physics_settings.get('physics_profile', 'balanced')).strip().lower() or 'balanced'
@@ -338,6 +340,70 @@ class Game:
             screen.blit(surf, (10, y))
             y += 18
 
+    def _get_enemy_velocity(self, enemy):
+        vel = getattr(enemy, 'vel', None)
+        if vel is not None:
+            try:
+                return pygame.Vector2(float(vel.x), float(vel.y))
+            except Exception:
+                pass
+        vx = float(getattr(enemy, 'vx', 0.0))
+        vy = float(getattr(enemy, 'vy', 0.0))
+        return pygame.Vector2(vx, vy)
+
+    def _get_enemy_render_forward(self, enemy, vel):
+        try:
+            ang = float(getattr(enemy, 'display_angle', 0.0))
+            forward = pygame.Vector2(math.cos(ang + math.pi / 2), math.sin(ang + math.pi / 2))
+            if forward.length_squared() > 1e-6:
+                return forward.normalize()
+        except Exception:
+            pass
+
+        if vel.length_squared() > 1e-6:
+            return vel.normalize()
+        return pygame.Vector2(1, 0)
+
+    def _draw_enemy_facing_debug(self, screen):
+        if not self.DEBUG_DRAW_ENEMY_FACING:
+            return
+
+        cam = pygame.Vector2(float(self.camera_x), float(self.camera_y))
+        for enemy in self.enemies:
+            vel = self._get_enemy_velocity(enemy)
+            forward = self._get_enemy_render_forward(enemy, vel)
+
+            center = pygame.Vector2(float(enemy.rect.centerx), float(enemy.rect.centery))
+            p0 = center - cam
+            p1 = p0 + forward * 28.0
+
+            vx = float(vel.x)
+            expected_sign = 0
+            if abs(vx) > 5.0:
+                expected_sign = 1 if vx > 0 else -1
+            facing_sign = 1 if forward.x >= 0 else -1
+
+            mismatch = expected_sign != 0 and facing_sign != expected_sign
+            color = (255, 80, 80) if mismatch else (120, 255, 140)
+
+            pygame.draw.line(screen, color, (int(p0.x), int(p0.y)), (int(p1.x), int(p1.y)), 2)
+
+            tip = p1
+            side = pygame.Vector2(-forward.y, forward.x)
+            left = tip - forward * 8.0 + side * 5.0
+            right = tip - forward * 8.0 - side * 5.0
+            pygame.draw.polygon(screen, color, [
+                (int(tip.x), int(tip.y)),
+                (int(left.x), int(left.y)),
+                (int(right.x), int(right.y)),
+            ])
+
+            facing_txt = 'right' if facing_sign > 0 else 'left'
+            label = f"{enemy.__class__.__name__} facing {facing_txt} | vx={vx:+.1f}"
+            txt_color = (255, 120, 120) if mismatch else (200, 230, 255)
+            txt = self.enemy_debug_font.render(label, True, txt_color)
+            screen.blit(txt, (int(p0.x + 12), int(p0.y - 18)))
+
     def reset_game(self):
         """Resettaa pelin tilan ja pelaajan"""
         self.current_wave = 1
@@ -407,6 +473,10 @@ class Game:
         """Päivitä pelilogiikka: pelaaja, viholliset, ammukset, collisionit jne."""
         frame_start = time.perf_counter()
         self.dt = self.clock.tick(60)
+
+        for event in events:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_F3:
+                self.DEBUG_DRAW_ENEMY_FACING = not self.DEBUG_DRAW_ENEMY_FACING
 
         # Päivitä planeetat ja pelaaja
         planets.update_planet(self.dt)
@@ -693,6 +763,7 @@ class Game:
 
         self.pistejarjestelma.show_score(10,10, pygame.font.SysFont('Arial',24), self.screen)
         draw_hud(self.screen, X, Y, self.player, self.lives, self.health_imgs, HEALTH_ICON_POS)
+        self._draw_enemy_facing_debug(self.screen)
         self._draw_physics_overlay(self.screen)
 
 

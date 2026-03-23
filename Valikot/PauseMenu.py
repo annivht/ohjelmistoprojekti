@@ -2,53 +2,14 @@ import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import pygame
 from Valikot.SettingsMenu import main as settings_menu_main
+from Valikot.menu_style import MenuButton, draw_dim_overlay, draw_menu_panel
 
 
 # Oletusnäytön asetukset (käytetään vain koordinaatteihin, ei luoda uutta ikkunaa)
 SCREEN_WIDTH = 1600
 SCREEN_HEIGHT = 800
 
-# Värit
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
 DARK_BLUE = (52, 78, 91)
-LIGHT_BLUE = (100, 150, 200)
-HOVER_COLOR = (150, 200, 255)
-SEMI_TRANSPARENT = (0, 0, 0, 150)
-
-# Fontit
-title_font = pygame.font.Font(None, 80)
-button_font = pygame.font.Font(None, 50)
-
-
-class Button:
-    """Nappi-luokka pauseluokalle"""
-    
-    def __init__(self, x, y, width, height, text, color, text_color, action=None):
-        self.rect = pygame.Rect(x, y, width, height)
-        self.text = text
-        self.color = color
-        self.text_color = text_color
-        self.action = action
-        self.is_hovered = False
-    
-    def draw(self, surface):
-        """Piirtää napin"""
-        current_color = HOVER_COLOR if self.is_hovered else self.color
-        pygame.draw.rect(surface, current_color, self.rect, border_radius=10)
-        pygame.draw.rect(surface, WHITE, self.rect, 3, border_radius=10)
-        
-        text_surf = button_font.render(self.text, True, self.text_color)
-        text_rect = text_surf.get_rect(center=self.rect.center)
-        surface.blit(text_surf, text_rect)
-    
-    def is_clicked(self, pos):
-        """Tarkistaa onko nappia klikattu"""
-        return self.rect.collidepoint(pos)
-    
-    def update(self, pos):
-        """Päivittää hover-tilan"""
-        self.is_hovered = self.rect.collidepoint(pos)
 
 
 class PauseMenu:
@@ -56,19 +17,24 @@ class PauseMenu:
     
     def __init__(self, screen=None):
         self.screen = screen
-        # Nappien asettelu: spacing ja keskitys, Quit aina alimmaiseksi
+        panel_width = 760
+        panel_height = 560
+        self.panel_rect = pygame.Rect(
+            SCREEN_WIDTH // 2 - panel_width // 2,
+            SCREEN_HEIGHT // 2 - panel_height // 2,
+            panel_width,
+            panel_height,
+        )
         button_width = 300
-        button_height = 80
-        button_spacing = 30
-        # Continue ylös, Settings keskelle, Quit aivan alas
+        button_height = 78
+        button_spacing = 22
+        total_height = 3 * button_height + 2 * button_spacing
+        start_y = self.panel_rect.top + 170 + (self.panel_rect.height - 240 - total_height) // 2
         center_x = SCREEN_WIDTH // 2 - button_width // 2
-        continue_y = SCREEN_HEIGHT // 2 - button_height - button_spacing // 2
-        quit_y = SCREEN_HEIGHT // 2 + button_spacing // 2
-        settings_y = SCREEN_HEIGHT - button_height - 80  # 80px marginaali alareunasta
         self.buttons = [
-            Button(center_x, continue_y, button_width, button_height, "Continue", (46, 163, 67), WHITE, action="continue"),
-            Button(center_x, quit_y, button_width, button_height, "Settings", (70, 85, 170), WHITE, action="settings"),
-            Button(center_x, settings_y, button_width, button_height, "Quit", (163, 67, 67), WHITE, action="quit"),
+            MenuButton(center_x, start_y, button_width, button_height, "CONTINUE", action="continue", variant="success"),
+            MenuButton(center_x, start_y + button_height + button_spacing, button_width, button_height, "SETTINGS", action="settings"),
+            MenuButton(center_x, start_y + 2 * (button_height + button_spacing), button_width, button_height, "QUIT", action="quit", variant="danger"),
         ]
         self.clock = pygame.time.Clock()
         self.running = True
@@ -116,14 +82,8 @@ class PauseMenu:
                 screen.fill(DARK_BLUE)
         else:
             screen.fill(DARK_BLUE)
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-        overlay.set_alpha(128)
-        overlay.fill(BLACK)
-        screen.blit(overlay, (0, 0))
-        # Piirrä otsikko keskelle
-        title_surf = title_font.render("PAUSED", True, WHITE)
-        title_rect = title_surf.get_rect(center=(SCREEN_WIDTH // 2, 180))
-        screen.blit(title_surf, title_rect)
+        draw_dim_overlay(screen)
+        draw_menu_panel(screen, self.panel_rect, "PAUSED", "Game is paused")
         # Piirrä napit
         mouse_pos = pygame.mouse.get_pos()
         for button in self.buttons:

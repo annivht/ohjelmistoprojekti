@@ -1,32 +1,28 @@
 import pygame
-
-
-class Button:
-    def __init__(self, x, y, width, height, text, color, text_color, screen):
-        self.rect = pygame.Rect(x, y, width, height)
-        self.text = text
-        self.color = color
-        self.text_color = text_color
-        self.font = pygame.font.SysFont('Arial', 36)
-        self.screen = screen
-
-    def draw(self):
-        pygame.draw.rect(self.screen, self.color, self.rect)
-        text_surface = self.font.render(self.text, True, self.text_color)
-        text_rect = text_surface.get_rect(center=self.rect.center)
-        self.screen.blit(text_surface, text_rect)
-    
-    def is_clicked(self, pos):
-        return self.rect.collidepoint(pos)
+from Valikot.menu_style import MenuButton, draw_dim_overlay, draw_menu_panel
 
 class GameOverScreen:
     def __init__(self, screen):
         self.screen = screen
-        self.font = pygame.font.SysFont('Arial', 48)
+        panel_width = 760
+        panel_height = 560
+        screen_w, screen_h = self.screen.get_size()
+        self.panel_rect = pygame.Rect(
+            screen_w // 2 - panel_width // 2,
+            screen_h // 2 - panel_height // 2,
+            panel_width,
+            panel_height,
+        )
+        button_width = 300
+        button_height = 78
+        button_spacing = 22
+        total_height = 3 * button_height + 2 * button_spacing
+        start_y = self.panel_rect.top + 200 + (self.panel_rect.height - 270 - total_height) // 2
+        center_x = screen_w // 2 - button_width // 2
         self.buttons = [
-            Button(100, 200, 200, 50, "TRY AGAIN", (0, 255, 0), (255, 255, 255), screen),
-            Button(100, 300, 200, 50, "MAIN MENU", (0, 255, 0), (255, 255, 255), screen),
-            Button(100, 400, 200, 50, "QUIT", (0, 255, 0), (255, 255, 255), screen)
+            MenuButton(center_x, start_y, button_width, button_height, "TRY AGAIN", action="TRY AGAIN", variant="success"),
+            MenuButton(center_x, start_y + button_height + button_spacing, button_width, button_height, "MAIN MENU", action="MAIN MENU"),
+            MenuButton(center_x, start_y + 2 * (button_height + button_spacing), button_width, button_height, "QUIT", action="QUIT", variant="danger"),
         ]
     
     def handle_event(self, event):
@@ -34,8 +30,9 @@ class GameOverScreen:
             pos = pygame.mouse.get_pos()
             for button in self.buttons:
                 if button.is_clicked(pos):
-                    return button.text
-    def show(self, X, Y, overlay=True):
+                    return button.action
+
+    def show(self, X, Y, overlay=True, background_surface=None):
         """
         Piirtää Game Over -näytön.
 
@@ -44,19 +41,23 @@ class GameOverScreen:
         Jos halutaan alkuperäinen, koko ruudun tyhjentävä käytös, kutsu
         `show(X, Y, overlay=False)`.
         """
+        if background_surface is not None:
+            try:
+                self.screen.blit(background_surface, (0, 0))
+            except Exception:
+                self.screen.fill((0, 0, 0))
         if overlay:
             # Piirretään läpikuultava musta pinta päälle (ei tyhjennetä taustaa)
-            overlay_surf = pygame.Surface((X, Y), flags=pygame.SRCALPHA)
-            overlay_surf.fill((0, 0, 0, 180))  # alfa-arvo 0-255
-            self.screen.blit(overlay_surf, (0, 0))
+            draw_dim_overlay(self.screen)
         else:
             # Takautuva toiminta: joko tyhjennetään näyttö kuten ennen
             self.screen.fill((0, 0, 0))
 
-        game_over_text = self.font.render("GAME OVER", True, (255, 0, 0))
-        self.screen.blit(game_over_text, (X // 2 - game_over_text.get_width() // 2, Y // 2 - game_over_text.get_height() // 2))
+        draw_menu_panel(self.screen, self.panel_rect, "GAME OVER", "Your mission ended")
+        mouse_pos = pygame.mouse.get_pos()
         for button in self.buttons:
-            button.draw()
+            button.update(mouse_pos)
+            button.draw(self.screen)
         pygame.display.update()
     
     def run(self):
