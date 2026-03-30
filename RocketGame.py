@@ -1202,8 +1202,12 @@ class Game:
         
 
         # Wave progression: wave 1 -> 2 -> 3 -> boss (4).
-        # A wave is clear only when both enemies and meteors are gone.
-        if (not self.is_test_level) and (not self.is_test2_level) and len(self.enemies) == 0 and len(self.meteors) == 0 and not self.level_completed and self.lives > 0:
+        # Taso 3 uses meteor hazards; they do not block wave advancement.
+        meteors_cleared = len(self.meteors) == 0
+        if int(self.level_number) == 3:
+            meteors_cleared = True
+
+        if (not self.is_test_level) and (not self.is_test2_level) and len(self.enemies) == 0 and meteors_cleared and not self.level_completed and self.lives > 0:
             if self.current_wave < self.MAX_WAVE:
                 self.current_wave += 1
                 self.enemy_bullets.clear()
