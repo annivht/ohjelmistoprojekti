@@ -39,6 +39,9 @@ class TextInput:
             else:
                 self.text += event.unicode
     
+    def set_rect(self, x, y, width, height):
+        self.rect = pygame.Rect(x, y, width, height)
+    
     def get_value(self):
         return self.text.strip()
     
@@ -80,6 +83,7 @@ class MainMenu:
         self.buttons = []
         self.panel_rect = None
         self.background_image = None
+        self.text_input = TextInput(1600, 800, 300, 40)
         self._update_layout()
 
     def _update_layout(self):
@@ -125,8 +129,6 @@ class MainMenu:
                 variant="danger",
             ),
         ]
-
-        self.text_input = TextInput(50, 100, 300, 40)
         
         # Menu backdrop: draw scene-like background and translucent veil
         # instead of a flat solid color.
@@ -139,6 +141,8 @@ class MainMenu:
             self.background_image = pygame.transform.scale(bg, (width, height))
         except Exception:
             self.background_image = None
+        
+        self.text_input.set_rect(center_x, start_y + 3 * (self.button_height + self.button_spacing), self.button_width, 40)
 
     def handle_events(self, events):
         """Handle a frame's events and return selected action or None."""
