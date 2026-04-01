@@ -8,6 +8,8 @@ class PlayState(GameState):
         super().__init__(manager)
         # Accept external level_manager or create new one
         self.level_manager = level_manager if level_manager else LevelManager(manager.screen)
+        # Expose level_manager on the manager so other states can reuse it
+        self.manager.level_manager = self.level_manager
 
     def update(self, events):
         for event in events:
@@ -33,4 +35,5 @@ class PlayState(GameState):
             return
 
     def draw(self, screen):
+        screen.fill((0, 0, 0))
         self.level_manager.draw(screen)

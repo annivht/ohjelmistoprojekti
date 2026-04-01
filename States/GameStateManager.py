@@ -14,6 +14,7 @@ class GameStateManager:
 
         self.clock = pygame.time.Clock()
         self.running = True
+        self.level_manager = None
 
         self.state = initial_state
         self.state.manager = self
