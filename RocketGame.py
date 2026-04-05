@@ -930,10 +930,11 @@ class Game:
             shoot_dt = self.dt
             if self.enemy_calm_timer_ms > 0:
                 shoot_dt = self.dt * self.enemy_calm_shoot_scale
-            if isinstance(e, BossEnemy):
-                e.maybe_shoot(shoot_dt, {'bullets': self.enemy_bullets, 'muzzles': self.muzzles}, player=self.player)
-            else:
-                e.maybe_shoot(shoot_dt, {'bullets': self.enemy_bullets, 'muzzles': self.muzzles})
+            e.maybe_shoot(
+                shoot_dt,
+                {'enemy_bullets': self.enemy_bullets},
+                player=self.player
+            )
 
         # Legacy meteor update path (non-test levels).
         if self.hazard_system is None:

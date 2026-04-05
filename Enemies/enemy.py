@@ -2,6 +2,7 @@
 
 
 
+from Enemies.EnemyHelpers import EnemyBullet
 import pygame
 import math
 import random
@@ -68,6 +69,10 @@ class Enemy(RigidBody, pygame.sprite.Sprite):
             'rotation_offset': 0.0,
             'min_angle': None,
             'max_angle': None,
+        }
+        # Set specific rotation config based on sprite index or type if needed
+        self.shots = {
+            "shot": [self._create_debug_bullet()]
         }
 
     def update(self, dt_ms: int, player=None, world_rect: pygame.Rect | None = None):
@@ -159,15 +164,62 @@ class Enemy(RigidBody, pygame.sprite.Sprite):
         self.rotation_config = get_sprite_config(sprite_index)
 
     def maybe_shoot(self, dt_ms: int, containers: dict | None = None, player=None):
-        """
-        Optional shooting behavior (override in subclasses).
-        
-        Args:
-            dt_ms: delta time in milliseconds
-            containers: dict with 'bullets', 'muzzles' lists
-            player: player reference for targeting
-        """
-        pass
+    # Ei ammuta jos ei sallittu
+        if not getattr(self, "can_shoot", False):
+            return
+
+        if player is None or containers is None:
+            return
+
+        # Cooldown
+        if not hasattr(self, "shoot_timer"):
+            self.shoot_timer = 0
+            self.shoot_interval = 1200
+            self.shoot_range = 800
+
+        self.shoot_timer -= dt_ms
+        if self.shoot_timer > 0:
+            return
+
+        # Etäisyys pelaajaan
+        dx = player.pos.x - self.pos.x
+        dy = player.pos.y - self.pos.y
+        dist = math.hypot(dx, dy)
+
+        if dist <= 0 or dist > self.shoot_range:
+            return
+
+        # Reset cooldown
+        self.shoot_timer = self.shoot_interval
+
+        # Tähtäys
+        angle = math.atan2(dy, dx)
+        self._update_display_angle(dt_ms, angle)
+
+        # Luo bullet
+        bullet = EnemyBullet.from_enemy(self)
+
+        if not bullet:
+            return
+
+        direction = pygame.Vector2(dx, dy)
+
+        if direction.length_squared() == 0:
+            return
+
+        direction = direction.normalize()
+        bullet.vel = direction * 420
+
+        # visuaalinen
+        bullet.image = pygame.Surface((6, 6))
+        bullet.image.fill((255, 0, 0))
+        bullet.rect = bullet.image.get_rect(center=self.rect.center)
+
+        # tallenna aktiivinen ammus
+        self.active_bullet = bullet
+
+        # lisää peliin
+        containers["enemy_bullets"].append(bullet)
 
     def draw(self, screen: pygame.Surface, camera_x: int, camera_y: int):
         try:
@@ -191,3 +243,8 @@ class Enemy(RigidBody, pygame.sprite.Sprite):
         except Exception:
             # Viimeinen varmistus: fallback vanhaan tapaan
             screen.blit(self.image, (self.rect.x - camera_x, self.rect.y - camera_y))
+    
+    def _create_debug_bullet(self):
+        surf = pygame.Surface((8, 8), pygame.SRCALPHA)
+        pygame.draw.circle(surf, (255, 0, 0), (4, 4), 4)
+        return surf
