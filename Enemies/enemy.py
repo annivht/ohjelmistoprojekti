@@ -174,8 +174,8 @@ class Enemy(RigidBody, pygame.sprite.Sprite):
         # Cooldown
         if not hasattr(self, "shoot_timer"):
             self.shoot_timer = 0
-            self.shoot_interval = 1200
-            self.shoot_range = 800
+            self.shoot_interval = 2000
+            self.shoot_range = 300
 
         self.shoot_timer -= dt_ms
         if self.shoot_timer > 0:
