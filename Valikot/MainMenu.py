@@ -22,6 +22,7 @@ class TextInput:
         self.color = color
         self.text_color = text_color
         self.active = False
+        self.last_saved_text = text
 
     def draw(self, surface):
         pygame.draw.rect(surface, self.color, self.rect, border_radius=5)
@@ -39,6 +40,7 @@ class TextInput:
                 self.text = self.text[:-1]
             else:
                 self.text += event.unicode
+            self.save_if_changed('player_name.txt')
     
     def set_rect(self, x, y, width, height):
         self.rect = pygame.Rect(x, y, width, height)
@@ -56,8 +58,16 @@ class TextInput:
         return self.text
     
     def save_to_file(self, filename):
+        """TALLENNA TEKSTI TIEDOSTOON"""
         with open(filename, 'w') as file:
             file.write(self.text)
+    
+    def save_if_changed(self, filename):
+        """TALLENNA VAIN JOS TEKSTI ON MUUTTUNUT"""
+        if self.text != self.last_saved_text:
+            self.save_to_file(filename)
+            self.last_saved_text = self.text
+
     
     def load_from_file(self, filename):
         try:
@@ -198,4 +208,3 @@ class MainMenu:
         
         self.text_input.handle_event(pygame.event.poll())
         self.text_input.draw(surface)
-        self.text_input.save_to_file('player_name.txt')
