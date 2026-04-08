@@ -1,5 +1,8 @@
 import pygame
 from Valikot.menu_style import draw_dim_overlay, draw_menu_panel
+import pelimusat
+import json
+import os
 
 from physics_settings import (
     DEFAULT_PHYSICS_SETTINGS,
@@ -16,6 +19,47 @@ from display_settings import (
     resolution_to_label,
     save_display_settings,
 )
+
+#------------------------------------------------------
+# AUDIO SETTINGS - ÄÄNENVOIMAKKUUKSIEN TALLENNUS
+#------------------------------------------------------
+
+# ÄÄNIASETUKSIEN TIEDOSTON SIJAINTI - SETTINGS-TIEDOSTOT KANSIOSSA
+AUDIO_SETTINGS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "SETTINGS-tiedostot", "audio_settings.json")
+
+def load_audio_settings():
+    """LATAA ÄÄNENVOIMAKKUUS-ASETUKSET TIEDOSTOSTA"""
+    print(f"[LOAD_AUDIO] 📂 Etsitään:{AUDIO_SETTINGS_FILE}")
+    if os.path.exists(AUDIO_SETTINGS_FILE):
+        print(f"[LOAD_AUDIO] ✓ Tiedosto löytyi")
+        try:
+            with open(AUDIO_SETTINGS_FILE, 'r') as f:
+                data = json.load(f)
+                print(f"[LOAD_AUDIO] ✅ Ladattu: {data}")
+                return data
+        except (json.JSONDecodeError, IOError, OSError) as e:
+            print(f"[LOAD_AUDIO] ❌ Virhe: {e}")
+            pass
+    else:
+        print(f"[LOAD_AUDIO] ⚠️ Tiedosto ei ole olemassa: {AUDIO_SETTINGS_FILE}")
+    return {"music_volume": 0.8, "sfx_volume": 0.8}
+
+def save_audio_settings(music_volume, sfx_volume):
+    """TALLENTAA ÄÄNENVOIMAKKUUS-ASETUKSET TIEDOSTOON"""
+    print(f"[SAVE_AUDIO] 💾 Tallennetaan: {AUDIO_SETTINGS_FILE}")
+    print(f"[SAVE_AUDIO] 💾 Arvot: Musiikki={int(music_volume*100)}%, SFX={int(sfx_volume*100)}%")
+    try:
+        # VARMISTA ETTÄ KANSIO ON OLEMASSA
+        directory = os.path.dirname(AUDIO_SETTINGS_FILE)
+        if directory and not os.path.exists(directory):
+            os.makedirs(directory)
+        
+        with open(AUDIO_SETTINGS_FILE, 'w') as f:
+            json.dump({"music_volume": music_volume, "sfx_volume": sfx_volume}, f)
+        print(f"[SAVE_AUDIO] ✅ TALLENNETTU ONNISTUNEESTI: {AUDIO_SETTINGS_FILE}")
+    except (IOError, OSError) as e:
+        print(f"[SAVE_AUDIO] ❌ VIRHE ÄÄNIASETUKSIEN TALLENTAMISESSA: {e}")
+        print(f"[SAVE_AUDIO] ❌ POLKU: {AUDIO_SETTINGS_FILE}")
 
 #------------------------------------------------------
 #Asennus: pip install pygame-menu
@@ -77,7 +121,7 @@ def main():
                 items = [(name, name) for name in load_physics_presets().keys()] or [("None", "")]
                 try:
                     preset_selector.update_items(items)
-                except Exception:
+                except (AttributeError, TypeError):
                     pass
         except Exception as exc:
             print(f"Could not save preset '{preset_name}': {exc}")
@@ -118,10 +162,17 @@ def main():
 
     def apply_display_settings_from_menu():
         nonlocal screen, frozen_bg
+        print(f"[APPLY_SETTINGS] 🎮 Apply Settings painike painettu!")
         data = general_menu.get_input_data()
+        print(f"[APPLY_SETTINGS] 📊 Menu data: {data}")
 
         selected_resolution = data.get("resolution", (("1280x720", "1280x720"), 0))[0][1]
         selected_mode = data.get("display_mode", (("Windowed", "windowed"), 0))[0][1]
+        
+        # HAKU ÄÄNENVOIMAKKUUDEN ARVOISTA
+        music_volume = float(data.get("music_volume", 0.8))
+        sfx_volume = float(data.get("sfx_volume", 0.8))
+        print(f"[APPLY_SETTINGS] 🎵 Haetut äänenvoimakkuudet: Musiikki={int(music_volume*100)}%, SFX={int(sfx_volume*100)}%")
 
         # Käytetään labelia suoraan ja parsitaan siitä width ja height
         width, height = parse_resolution_label(selected_resolution)
@@ -133,6 +184,13 @@ def main():
             "height": height,
             "fullscreen": fullscreen
         })
+        
+        # TALLENNETAAN ÄÄNENVOIMAKKUUS ASETUKSET JA ASETETAAN PELIIN
+        save_audio_settings(music_volume, sfx_volume)
+        if pelimusat.game_sounds:
+            pelimusat.game_sounds.set_music_volume(music_volume)
+            pelimusat.game_sounds.set_sfx_volume(sfx_volume)
+            print(f"[APPLY_SETTINGS] ✅ ÄÄNENVOIMAKKUUS ASETETTU PELIIN - Musiikki: {int(music_volume*100)}%, Tehosteet: {int(sfx_volume*100)}%")
 
         # Käytä windowed-tilassa oletusflagia (näkyy yläpalkki), fullscreenissä FULLSCREEN
         flags = pygame.FULLSCREEN if fullscreen else 0
@@ -168,7 +226,7 @@ def main():
 
     try:
         import pygame_menu as pm
-    except Exception:
+    except ImportError:
         pm = None
 
     if pm is None:
@@ -194,9 +252,10 @@ def main():
     menu_theme.widget_padding = 10
 
     def create_menus():
-        nonlocal settings, general_menu, physics_menu, WIDTH, HEIGHT, display_data
+        nonlocal settings, general_menu, physics_menu, WIDTH, HEIGHT, display_data, audio_data
         WIDTH, HEIGHT = get_menu_size()
         display_data = load_display_settings()  # Lataa aina tuore display_data tiedostosta
+        audio_data = load_audio_settings()  # LATAA AINA TUORE AUDIO_DATA TIEDOSTOSTA
         settings = pm.Menu(
             title="Settings",
             width=WIDTH,
@@ -238,8 +297,61 @@ def main():
                 "fullscreen" if display_data.get("fullscreen", False) else "windowed",
             ),
         )
-        general_menu.add.toggle_switch(title="Music", default=True, toggleswitch_id="music")
-        general_menu.add.toggle_switch(title="Sounds", default=False, toggleswitch_id="sound")
+        
+        # CALLBACK-FUNKTIOT ÄÄNENVOIMAKKUUKSIEN REAALIAIKAISELLE PÄIVITTÄMISELLE JA TALLENNUKSELLE
+        def on_music_volume_change(value):
+            """SOITETAAN KUN MUSIIKIN ÄÄNENVOIMAKKUUS MUUTTUU - TALLENTAA ASETUKSET HETI"""
+            print(f"[SETTINGS_CALLBACK] 🎵 Musiikin äänenvoimakkuus muuttui: {value} ({int(value*100)}%)")
+            if pelimusat.game_sounds:
+                pelimusat.game_sounds.set_music_volume(value)
+                print(f"[SETTINGS_CALLBACK] ✓ Asetettu peliin")
+            # HAKU NYKYINEN SFX-VOLUME JA TALLENNA MOLEMMAT HETI
+            data = general_menu.get_input_data()
+            print(f"[SETTINGS_CALLBACK] 📊 Menu data: {data}")
+            try:
+                sfx_vol = float(data.get("sfx_volume", 0.8))
+                save_audio_settings(value, sfx_vol)
+                print(f"[SETTINGS_CALLBACK] ✅ TALLENNETTU: Musiikki={int(value*100)}%, SFX={int(sfx_vol*100)}%")
+            except (ValueError, TypeError) as e:
+                # EI TALLENNETA JOS KONVERSIO EPÄONNISTUU, MUTTA ÄÄNENVOIMAKKUUS ASETETAAN PELIIN
+                print(f"[SETTINGS_CALLBACK] ❌ VIRHE tallentamisessa: {e}")
+
+        def on_sfx_volume_change(value):
+            """SOITETAAN KUN TEHOSTEIDEN ÄÄNENVOIMAKKUUS MUUTTUU - TALLENTAA ASETUKSET HETI"""
+            print(f"[SETTINGS_CALLBACK] 🔊 SFX äänenvoimakkuus muuttui: {value} ({int(value*100)}%)")
+            if pelimusat.game_sounds:
+                pelimusat.game_sounds.set_sfx_volume(value)
+                print(f"[SETTINGS_CALLBACK] ✓ Asetettu peliin")
+            # HAKU NYKYINEN MUSIC-VOLUME JA TALLENNA MOLEMMAT HETI
+            data = general_menu.get_input_data()
+            print(f"[SETTINGS_CALLBACK] 📊 Menu data: {data}")
+            try:
+                music_vol = float(data.get("music_volume", 0.8))
+                save_audio_settings(music_vol, value)
+                print(f"[SETTINGS_CALLBACK] ✅ TALLENNETTU: Musiikki={int(music_vol*100)}%, SFX={int(value*100)}%")
+            except (ValueError, TypeError) as e:
+                # EI TALLENNETA JOS KONVERSIO EPÄONNISTUU, MUTTA ÄÄNENVOIMAKKUUS ASETETAAN PELIIN
+                print(f"[SETTINGS_CALLBACK] ❌ VIRHE tallentamisessa: {e}")
+        
+        # ÄÄNENVOIMAKKUUDEN SÄÄTÖSLIDERIT - ONLINE CALLBACK PÄIVITYKSELLÄ
+        general_menu.add.range_slider(
+            title="Music Volume",
+            default=audio_data.get("music_volume", 0.8),
+            range_values=(0.0, 1.0),
+            increment=0.05,
+            value_format=lambda x: f"{int(x * 100)}%",
+            rangeslider_id="music_volume",
+            onchange=on_music_volume_change,
+        )
+        general_menu.add.range_slider(
+            title="Sound Effects Volume",
+            default=audio_data.get("sfx_volume", 0.8),
+            range_values=(0.0, 1.0),
+            increment=0.05,
+            value_format=lambda x: f"{int(x * 100)}%",
+            rangeslider_id="sfx_volume",
+            onchange=on_sfx_volume_change,
+        )
         general_menu.add.button(
             title="Apply Settings",
             action=apply_display_settings_from_menu,
@@ -334,6 +446,7 @@ def main():
     # Alustava luonti
     settings = general_menu = physics_menu = preset_selector = None
     WIDTH = HEIGHT = 0
+    audio_data = load_audio_settings()  # LATAA AUDIO-ASETUKSET ALUSTA LÄHTIEN
     create_menus()
 
     def draw_translucent_bg():
@@ -446,6 +559,10 @@ def main():
         data = general_menu.get_input_data()
         selected_resolution = data.get("resolution", (("1280x720", "1280x720"), 0))[0][1]
         selected_mode = data.get("display_mode", (("Windowed", "windowed"), 0))[0][1]
+        
+        # HAKU ÄÄNENVOIMAKKUUDEN ARVOISTA
+        music_volume = float(data.get("music_volume", 0.8))
+        sfx_volume = float(data.get("sfx_volume", 0.8))
 
         width, height = parse_resolution_label(selected_resolution)
         fullscreen = str(selected_mode).strip().lower() == "fullscreen"
@@ -456,6 +573,13 @@ def main():
             "fullscreen": fullscreen,
         }
         save_display_settings(new_display)
+        
+        # TALLENNETAAN ÄÄNENVOIMAKKUUS ASETUKSET JA ASETETAAN PELIIN
+        save_audio_settings(music_volume, sfx_volume)
+        if pelimusat.game_sounds:
+            pelimusat.game_sounds.set_music_volume(music_volume)
+            pelimusat.game_sounds.set_sfx_volume(sfx_volume)
+            print(f"ÄÄNENVOIMAKKUUS ASETETTU - Musiikki: {int(music_volume*100)}%, Tehosteet: {int(sfx_volume*100)}%")
 
         # Käytä windowed-tilassa oletusflagia (näkyy yläpalkki), fullscreenissä FULLSCREEN
         flags = pygame.FULLSCREEN if fullscreen else 0
@@ -490,8 +614,23 @@ def main():
             "fullscreen" if display_data.get("fullscreen", False) else "windowed",
         ),
     )
-    general_menu.add.toggle_switch(title="Music", default=True, toggleswitch_id="music")
-    general_menu.add.toggle_switch(title="Sounds", default=False, toggleswitch_id="sound")
+    # ÄÄNENVOIMAKKUUDEN SÄÄTÖSLIDERIT
+    general_menu.add.range_slider(
+        title="Music Volume",
+        default=0.8,
+        range_values=(0.0, 1.0),
+        increment=0.05,
+        value_format=lambda x: f"{int(x * 100)}%",
+        rangeslider_id="music_volume",
+    )
+    general_menu.add.range_slider(
+        title="Sound Effects Volume",
+        default=0.8,
+        range_values=(0.0, 1.0),
+        increment=0.05,
+        value_format=lambda x: f"{int(x * 100)}%",
+        rangeslider_id="sfx_volume",
+    )
     general_menu.add.button(
         title="Apply Settings",
         action=apply_display_settings_from_menu,

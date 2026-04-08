@@ -4,6 +4,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from Ammus import Ammus, DEFAULT_FORWARD_OFFSET, DEFAULT_SIDE_OFFSET
+import pelimusat
 
 """
 PLAYER_LUOKAT/PlayerWeapons.py
@@ -75,6 +76,10 @@ class PlayerWeapons:
             y2 = pos.y + math.sin(rad) * forward_offset - math.sin(perp_rad) * side_offset
             self.bullets.add(Ammus(x1, y1, angle, self.bullet_img))
             self.bullets.add(Ammus(x2, y2, angle, self.bullet_img))
+            # SOITA LASER_FIRE -ÄÄNI KUN AMMUTAAN
+            if pelimusat.game_sounds:
+                pelimusat.game_sounds.play_sfx("laser_fire")
+            self.shoot_timer = self.shoot_cooldown
 
     def shoot_with(self, pos, angle, img, *, preset_kind=None, speed=None, damage=None, size=None, offset=None, count=None):
         """Shoot using a specific image and optional preset/overrides.
@@ -171,6 +176,16 @@ class PlayerWeapons:
                           offset=per_params.get('offset', (forward_offset, side)),
                           count=1)
             self.bullets.add(a)
+        
+        # SOITA SOPIVA ÄÄNI PRESETIN MUKAAN
+        if pelimusat.game_sounds:
+            if preset_kind == "Shot1":
+                # L-NAPPI LASER
+                pelimusat.game_sounds.play_sfx("laser_fire")
+            else:
+                # P-NAPPI AMMO (Shot2 tai muut)
+                pelimusat.game_sounds.play_sfx("ammus_fire")
+        
         # If preset defines a cooldown, set it now so the preset cannot be used
         # again until the cooldown expires.
         if preset_kind:

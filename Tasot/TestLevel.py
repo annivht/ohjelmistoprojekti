@@ -56,5 +56,11 @@ def spawn_wave_test(
     apply_hitbox(boss, hitbox_boss)
     game.boss = boss
     game.enemies.append(boss)
+    
+    # BOSS SAAPUI - TAUOTA TAUSTAMUSIIKKI JA TOISTA BOSS ÄÄNI
+    import pelimusat
+    if pelimusat.game_sounds:
+        pelimusat.game_sounds.pause_music()  # TAUOTA PELIMUSA-ROOT
+        pelimusat.game_sounds.play_music("boss_sound", loops=-1)  # TOISTA BOSS SOUND LOOPISSA
 
     return True

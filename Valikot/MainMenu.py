@@ -68,12 +68,15 @@ class TextInput:
 class MainMenu:
     """State-friendly main menu that draws to an external surface."""
 
-    def __init__(self):
+    def __init__(self, sounds=None):
         if not pygame.get_init():
             pygame.init()
 
         if not pygame.font.get_init():
             pygame.font.init()
+
+        self.sounds = sounds
+        self.previous_hovered_button = None
 
         self.button_width = 300
         self.button_height = 78
@@ -170,6 +173,11 @@ class MainMenu:
         mouse_pos = pygame.mouse.get_pos()
         for button in self.buttons:
             button.update(mouse_pos)
+            # SOITA HOVER-ÄÄNI KUN HIIRI SIIRTYY NAPIN PÄÄLLE
+            if button.is_hovered and button != self.previous_hovered_button:
+                if self.sounds:
+                    self.sounds.play_sfx("button_hover")
+            self.previous_hovered_button = button if button.is_hovered else None
             button.draw(surface)
         
         self.text_input.handle_event(pygame.event.poll())

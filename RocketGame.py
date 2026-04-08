@@ -28,6 +28,7 @@ from ui import init_enemy_health_bars, draw_hud
 from Physics.box2d_world import Box2DPhysicsWorld, CollisionCategory
 from physics_settings import load_physics_settings
 import planets
+import pelimusat
 from Meteor.meteor import Meteor
 from Hazards.hazard_system import HazardSystem
 from Tasot.Taso1 import spawn_wave_taso1
@@ -975,6 +976,12 @@ class Game:
 
                         if died:
                             self.explosion_manager.spawn_boss(enemy.rect.center, fps=20)
+                            # SOITA BOSS EXPLOSION ÄÄNI
+                            if pelimusat.game_sounds:
+                                pelimusat.game_sounds.play_sfx("boss_explosion")
+                                # JATKA TAUSTAMUSIIKKIA SEURAAVAA TASOA KOHTI
+                                pelimusat.game_sounds.stop_music(fadeout_ms=0)
+                                pelimusat.game_sounds.play_music("pelimusa-root", loops=-1)
                             if enemy in self.enemies:
                                 if self.hazard_system is not None:
                                     self.hazard_system.on_enemy_destroyed(enemy, is_boss=True)
@@ -990,6 +997,12 @@ class Game:
                             enemy.hp -= damage
                             if enemy.hp <= 0:
                                 self.explosion_manager.spawn_enemy(enemy.rect.center, fps=20)
+                                # SOITA ENEMY EXPLOSION ÄÄNI
+                                try:
+                                    if pelimusat.game_sounds:
+                                        pelimusat.game_sounds.play_sfx("enemy_explosion")
+                                except Exception as e:
+                                    print(f"[ROCKEETGAME] ❌ ENEMY EXPLOSION ÄÄNI VIRHE: {e}")
                                 if enemy in self.enemies:
                                     if self.hazard_system is not None:
                                         self.hazard_system.on_enemy_destroyed(enemy, is_boss=False)
@@ -999,6 +1012,12 @@ class Game:
                                 self.explosion_manager.spawn_hit(impact_pos, fps=24)
                         else:
                             self.explosion_manager.spawn_enemy(impact_pos, fps=20)
+                            # SOITA ENEMY EXPLOSION ÄÄNI
+                            try:
+                                if pelimusat.game_sounds:
+                                    pelimusat.game_sounds.play_sfx("enemy_explosion")
+                            except Exception as e:
+                                print(f"[ROCKEETGAME] ❌ ENEMY EXPLOSION ÄÄNI VIRHE: {e}")
                     
                             if enemy in self.enemies:
                                 if self.hazard_system is not None:
@@ -1089,6 +1108,9 @@ class Game:
             if damage > 0 and self.lives > 0 and self.player_death_menu_delay_remaining is None:
                 self.player.health = max(0, int(self.player.health) - damage)
                 self.lives = self.player.health
+                # SOITA METEOR_HITS_PLAYER -ÄÄNI KUN PELAAJA OTTAA VAHINKOA
+                if pelimusat.game_sounds:
+                    pelimusat.game_sounds.play_sfx("meteor_hits_player")
                 try:
                     if hasattr(self.player, 'trigger_hit_animation'):
                         self.player.trigger_hit_animation()
@@ -1187,6 +1209,12 @@ class Game:
                     # Non-boss enemies explode on collision to prevent instant chain hits.
                     if not isinstance(enemy, BossEnemy):
                         self.explosion_manager.spawn_enemy(enemy.rect.center, fps=22)
+                        # SOITA ENEMY EXPLOSION ÄÄNI
+                        try:
+                            if pelimusat.game_sounds:
+                                pelimusat.game_sounds.play_sfx("enemy_explosion")
+                        except Exception as e:
+                            print(f"[ROCKEETGAME] ❌ ENEMY EXPLOSION ÄÄNI VIRHE: {e}")
                         if enemy in self.enemies:
                             if self.hazard_system is not None:
                                 self.hazard_system.on_enemy_destroyed(enemy, is_boss=False)
