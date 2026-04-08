@@ -85,14 +85,23 @@ class Leaderboard:
         self.scores.clear()
 
     def save_to_file(self, filename: str) -> None:
-        with open(filename, 'w') as file:
-            json.dump(self.scores, file)
+        try:
+            with open(filename, 'w') as file:
+                json.dump(self.scores, file)
+        except Exception as e:
+            print(f"Virhe tallennettaessa tiedostoon: {e}")
 
     def load_from_file(self, filename: str) -> None:
         self.scores.clear()
-        with open(filename, 'r') as file:
-            self.scores = json.load(file)
-    
+        try:
+            with open(filename, 'r') as file:
+                self.scores = json.load(file)
+        except Exception as e:
+            print(f"Virhe ladattaessa tiedostosta: {e}")
+            with open(filename, 'w') as file:
+                json.dump({}, file)
+                self.scores = {}
+
     def merge_leaderboard(self, other_leaderboard) -> None:
         for player_id, score in other_leaderboard.get_player_scores().items():
             self.add_score(player_id, score)

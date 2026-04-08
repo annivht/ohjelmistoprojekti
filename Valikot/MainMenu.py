@@ -183,6 +183,8 @@ class MainMenu:
                 screen.blit(score, (x, y + 30 * (list(scores.keys()).index(player_id) + 1)))
         except FileNotFoundError:
             pass
+        except json.JSONDecodeError:
+            pass
 
     def draw(self, surface):
         # Päivitä layout aina ennen piirtämistä, jos ikkunan koko on muuttunut
