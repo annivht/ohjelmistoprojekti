@@ -496,10 +496,14 @@ class DownEnemy(Enemy):
         super().__init__(image, x, y, hp)
         if sprite_index is not None:
             self.set_sprite_config(sprite_index)
+        # Vertical movers must always rotate to match movement direction.
+        self.rotation_config['rotation_enabled'] = True
+        self.rotation_config['min_angle'] = None
+        self.rotation_config['max_angle'] = None
         self.speed = speed  # Positive = downward
         self.vel = pygame.Vector2(0, self.speed)
-        # Set initial angle: 90° = facing down (π/2 radians)
-        self.display_angle = math.pi / 2
+        # Match common enemy angle convention from velocity.
+        self.display_angle = math.atan2(self.speed, 0.0) - math.pi / 2
 
     def update(self, dt_ms, player=None, world_rect=None):
         dt = dt_ms / 1000.0
@@ -517,17 +521,14 @@ class DownEnemy(Enemy):
             if self.pos.y - (self.rect.height // 2) <= world_rect.top:
                 self.pos.y = world_rect.top + (self.rect.height // 2)
                 self.speed = abs(self.speed)  # Ensure moving downward
-                self._update_display_angle(dt_ms, math.pi / 2)
+                self._update_display_angle(dt_ms, math.atan2(self.speed, 0.0) - math.pi / 2)
             elif self.pos.y + (self.rect.height // 2) >= world_rect.bottom:
                 self.pos.y = world_rect.bottom - (self.rect.height // 2)
                 self.speed = -abs(self.speed)  # Reverse to moving upward
-                self._update_display_angle(dt_ms, -math.pi / 2)
-        else:
-            # Update angle based on current speed direction
-            if self.speed > 0:
-                self._update_display_angle(dt_ms, math.pi / 2)
-            else:
-                self._update_display_angle(dt_ms, -math.pi / 2)
+                self._update_display_angle(dt_ms, math.atan2(self.speed, 0.0) - math.pi / 2)
+
+        # Keep facing in sync every frame even when no boundary bounce occurs.
+        self._update_display_angle(dt_ms, math.atan2(self.speed, 0.0) - math.pi / 2)
         
         # Update rect to follow pos
         self.rect.center = (int(self.pos.x), int(self.pos.y))
@@ -539,10 +540,14 @@ class UpEnemy(Enemy):
         super().__init__(image, x, y, hp)
         if sprite_index is not None:
             self.set_sprite_config(sprite_index)
+        # Vertical movers must always rotate to match movement direction.
+        self.rotation_config['rotation_enabled'] = True
+        self.rotation_config['min_angle'] = None
+        self.rotation_config['max_angle'] = None
         self.speed = -speed  # Negative = upward movement
         self.vel = pygame.Vector2(0, self.speed)
-        # Set initial angle: -90° = facing up (-π/2 radians)
-        self.display_angle = -math.pi / 2
+        # Match common enemy angle convention from velocity.
+        self.display_angle = math.atan2(self.speed, 0.0) - math.pi / 2
 
     def update(self, dt_ms, player=None, world_rect=None):
         dt = dt_ms / 1000.0
@@ -560,17 +565,14 @@ class UpEnemy(Enemy):
             if self.pos.y - (self.rect.height // 2) <= world_rect.top:
                 self.pos.y = world_rect.top + (self.rect.height // 2)
                 self.speed = abs(self.speed)  # Reverse to moving downward
-                self._update_display_angle(dt_ms, math.pi / 2)
+                self._update_display_angle(dt_ms, math.atan2(self.speed, 0.0) - math.pi / 2)
             elif self.pos.y + (self.rect.height // 2) >= world_rect.bottom:
                 self.pos.y = world_rect.bottom - (self.rect.height // 2)
                 self.speed = -abs(self.speed)  # Reverse to moving upward
-                self._update_display_angle(dt_ms, -math.pi / 2)
-        else:
-            # Update angle based on current speed direction
-            if self.speed < 0:
-                self._update_display_angle(dt_ms, -math.pi / 2)
-            else:
-                self._update_display_angle(dt_ms, math.pi / 2)
+                self._update_display_angle(dt_ms, math.atan2(self.speed, 0.0) - math.pi / 2)
+
+        # Keep facing in sync every frame even when no boundary bounce occurs.
+        self._update_display_angle(dt_ms, math.atan2(self.speed, 0.0) - math.pi / 2)
         
         # Update rect to follow pos
         self.rect.center = (int(self.pos.x), int(self.pos.y))
