@@ -318,32 +318,39 @@ class BossEnemy(Enemy):
             selected.sort(key=lambda item: item[0])
             return [p for _, p in selected]
 
-        root = Path(__file__).resolve().parent / "images" / "Space-Shooter_objects" / "PNG" / "Sprites" / "Missile"
         variants = {}
         missile_scale = 0.10
-        for variant in ("3", "2", "1"):
-            flight_paths = _select_index_range(sorted(root.glob(f"Missile_{variant}_Flying_*.png")), "Flying", 0, 9)
-            explode_paths = _select_index_range(sorted(root.glob(f"Missile_{variant}_Explosion_*.png")), "Explosion", 0, 8)
-            flight = []
-            explode = []
-            for p in flight_paths:
-                try:
-                    raw = pygame.image.load(str(p)).convert_alpha()
-                    w = max(4, int(raw.get_width() * missile_scale))
-                    h = max(4, int(raw.get_height() * missile_scale))
-                    flight.append(pygame.transform.smoothscale(raw, (w, h)))
-                except Exception:
-                    continue
-            for p in explode_paths:
-                try:
-                    raw = pygame.image.load(str(p)).convert_alpha()
-                    w = max(6, int(raw.get_width() * missile_scale))
-                    h = max(6, int(raw.get_height() * missile_scale))
-                    explode.append(pygame.transform.smoothscale(raw, (w, h)))
-                except Exception:
-                    continue
-            if flight:
-                variants[variant] = {"flight": flight, "explode": explode}
+        
+        try:
+            # Try to find missile sprites; start from project root
+            root = Path(__file__).resolve().parent.parent / "images" / "Space-Shooter_objects" / "PNG" / "Sprites" / "Missile"
+            
+            for variant in ("3", "2", "1"):
+                flight_paths = _select_index_range(sorted(root.glob(f"Missile_{variant}_Flying_*.png")), "Flying", 0, 9)
+                explode_paths = _select_index_range(sorted(root.glob(f"Missile_{variant}_Explosion_*.png")), "Explosion", 0, 8)
+                flight = []
+                explode = []
+                for p in flight_paths:
+                    try:
+                        raw = pygame.image.load(str(p)).convert_alpha()
+                        w = max(4, int(raw.get_width() * missile_scale))
+                        h = max(4, int(raw.get_height() * missile_scale))
+                        flight.append(pygame.transform.smoothscale(raw, (w, h)))
+                    except Exception:
+                        continue
+                for p in explode_paths:
+                    try:
+                        raw = pygame.image.load(str(p)).convert_alpha()
+                        w = max(6, int(raw.get_width() * missile_scale))
+                        h = max(6, int(raw.get_height() * missile_scale))
+                        explode.append(pygame.transform.smoothscale(raw, (w, h)))
+                    except Exception:
+                        continue
+                if flight:
+                    variants[variant] = {"flight": flight, "explode": explode}
+        except Exception:
+            # If anything fails, just continue to fallback
+            pass
 
         if not variants:
             fallback = pygame.Surface((26, 12), pygame.SRCALPHA)

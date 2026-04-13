@@ -792,7 +792,19 @@ class UltimateEnemy(Enemy):
         self.rect.center = (int(self.pos.x), int(self.pos.y))
 
     def draw(self, screen: pygame.Surface, camera_x: int, camera_y: int):
-        """Draw the enemy sprite with rotation. Exhaust animation handled separately if needed."""
+        """Draw the enemy sprite with rotation and exhaust animation."""
+        # Draw exhaust animation behind the ship
+        exhaust_list = self.exhaust_turbo if self.turbo and self.exhaust_turbo else self.exhaust_normal
+        if exhaust_list and self.exhaust_index < len(exhaust_list):
+            try:
+                exhaust_frame = exhaust_list[self.exhaust_index]
+                # Place exhaust behind the ship
+                exhaust_rect = exhaust_frame.get_rect(center=(self.rect.centerx - camera_x - 30, self.rect.centery - camera_y))
+                screen.blit(exhaust_frame, exhaust_rect.topleft)
+            except Exception:
+                pass
+        
+        # Draw main sprite with rotation (use parent class draw logic)
         try:
             ang = float(getattr(self, 'display_angle', 0.0))
         except Exception:
@@ -801,7 +813,7 @@ class UltimateEnemy(Enemy):
         deg = -math.degrees(ang)
         try:
             if abs(deg) > 0.0001:
-                # Rotate using rotozoom (same as parent Enemy class)
+                # Rotate using rotozoom
                 surf = pygame.transform.rotozoom(self.image, deg, 1.0)
                 r = surf.get_rect(center=(self.rect.centerx - camera_x, self.rect.centery - camera_y))
                 screen.blit(surf, r.topleft)
