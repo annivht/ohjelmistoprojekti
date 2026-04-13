@@ -60,21 +60,27 @@ def spawn_wave_taso1(
 			sprite_index=2,
 		)
 		# UltimateEnemy - käyttää Ship2 sprite (20.png)
-		e3 = None
+		ultimate_enemies = []
 		if ultimate_enemy_cls:
-			e3 = ultimate_enemy_cls(
-				game.enemy_imgs[8],  # 20.png on indeksissä 8 (1,2,8,9,10,11,12,13,20)
-				game.tausta_leveys - 200,
-				game.tausta_korkeus - 200,
-				speed=speeds.get('ultimate', 250),
-				hp=2,
-				exhaust_normal=game.ss.exhaust_normal,
-				exhaust_turbo=game.ss.exhaust_turbo,
-			)
-			_set_enemy_hp(e3, 2)
-			apply_hitbox(e3, hitbox_enemy)
+			positions = [
+				(game.tausta_leveys - 200, game.tausta_korkeus - 200),  # oikea-alas
+				(200, game.tausta_korkeus - 200),  # vasen-alas
+				(game.tausta_leveys // 2, 200),  # keskellä-ylös
+			]
+			for px, py in positions:
+				ue = ultimate_enemy_cls(
+					game.enemy_imgs[8],  # 20.png
+					px, py,
+					speed=speeds.get('ultimate', 250),
+					hp=2,
+					exhaust_normal=game.ss.exhaust_normal,
+					exhaust_turbo=game.ss.exhaust_turbo,
+				)
+				_set_enemy_hp(ue, 2)
+				apply_hitbox(ue, hitbox_enemy)
+				ultimate_enemies.append(ue)
 		
-		for enemy in filter(None, [e1, e2, e3]):
+		for enemy in [e1, e2] + ultimate_enemies:
 			_set_enemy_hp(enemy, 1)
 			apply_hitbox(enemy, hitbox_enemy)
 			game.enemies.append(enemy)
