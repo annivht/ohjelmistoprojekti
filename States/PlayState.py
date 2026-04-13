@@ -7,7 +7,7 @@ class PlayState(GameState):
     def __init__(self, manager, level_manager=None):
         super().__init__(manager)
         # Accept external level_manager or create new one
-        self.level_manager = level_manager if level_manager else LevelManager(manager.screen)
+        self.level_manager = level_manager if level_manager else LevelManager(manager.screen, num_levels=3)
         # Expose level_manager on the manager so other states can reuse it
         self.manager.level_manager = self.level_manager
 
@@ -23,8 +23,15 @@ class PlayState(GameState):
 
         # Check if current level is complete
         if self.level_manager.is_level_complete():
-            from States.LevelCompleteState import LevelCompleteState
-            self.manager.set_state(LevelCompleteState(self.manager, self.level_manager))
+            current_level = self.level_manager.get_current_level_number()
+            max_level = getattr(self.level_manager, "num_levels", current_level)
+
+            if current_level in (0, 6) or current_level >= max_level:
+                from States.VictoryState import VictoryState
+                self.manager.set_state(VictoryState(self.manager, self.level_manager))
+            else:
+                from States.LevelCompleteState import LevelCompleteState
+                self.manager.set_state(LevelCompleteState(self.manager, self.level_manager))
             return
 
         # Check if current level resulted in game over.

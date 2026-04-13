@@ -52,7 +52,8 @@ class LevelCompleteState(GameState):
                     return True
                 else:
                     # All levels completed
-                    self.manager.set_state(MainMenuState(self.manager))
+                    from States.VictoryState import VictoryState
+                    self.manager.set_state(VictoryState(self.manager, self.level_manager))
                     return True
             else:
                 # Fallback: restart PlayState if no level manager
@@ -61,7 +62,8 @@ class LevelCompleteState(GameState):
                 return True
 
         if result == "game_completed":
-            self.manager.set_state(MainMenuState(self.manager))
+            from States.VictoryState import VictoryState
+            self.manager.set_state(VictoryState(self.manager, self.level_manager))
             return True
 
         if result == "settings":
