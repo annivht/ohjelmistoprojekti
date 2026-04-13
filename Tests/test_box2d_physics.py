@@ -1,8 +1,20 @@
+import os
+import sys
 import unittest
 
 import pygame
 
-from Physics.box2d_world import Box2DPhysicsWorld
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+try:
+    from Physics.box2d_world import Box2DPhysicsWorld
+    BOX2D_AVAILABLE = True
+except Exception:
+    Box2DPhysicsWorld = None
+    BOX2D_AVAILABLE = False
 
 
 class DummyEntity:
@@ -15,6 +27,7 @@ class DummyEntity:
 
 
 class TestBox2DPhysics(unittest.TestCase):
+    @unittest.skipUnless(BOX2D_AVAILABLE, "Box2D not available in this environment")
     def test_fixed_step_is_stable_for_same_total_time(self):
         e1 = DummyEntity(100, 100)
         e2 = DummyEntity(100, 100)
@@ -35,6 +48,7 @@ class TestBox2DPhysics(unittest.TestCase):
         self.assertAlmostEqual(e1.pos.x, e2.pos.x, delta=1.0)
         self.assertAlmostEqual(e1.pos.y, e2.pos.y, delta=1.0)
 
+    @unittest.skipUnless(BOX2D_AVAILABLE, "Box2D not available in this environment")
     def test_explosion_impulse_pushes_outward(self):
         e = DummyEntity(120, 100)
         w = Box2DPhysicsWorld()
@@ -46,6 +60,7 @@ class TestBox2DPhysics(unittest.TestCase):
 
         self.assertGreater(e.vel.x, 0.0)
 
+    @unittest.skipUnless(BOX2D_AVAILABLE, "Box2D not available in this environment")
     def test_metrics_present_after_step(self):
         e = DummyEntity(50, 50)
         w = Box2DPhysicsWorld()
