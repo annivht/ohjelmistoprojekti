@@ -1,6 +1,6 @@
 import pygame
 from Valikot.menu_style import draw_dim_overlay, draw_menu_panel
-import pelimusat
+from Audio import pelimusat
 import json
 import os
 

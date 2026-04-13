@@ -1,7 +1,7 @@
 import pygame
 from display_settings import load_display_settings
-from pelimusat import GameSounds
-import pelimusat
+from Audio.pelimusat import GameSounds
+from Audio import pelimusat
 import json
 import os
 

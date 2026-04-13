@@ -28,7 +28,7 @@ from ui import init_enemy_health_bars, draw_hud
 from Physics.box2d_world import Box2DPhysicsWorld, CollisionCategory
 from physics_settings import load_physics_settings
 import planets
-import pelimusat
+from Audio import pelimusat
 from Meteor.meteor import Meteor
 from Hazards.hazard_system import HazardSystem
 from Tasot.Taso1 import spawn_wave_taso1

@@ -4,7 +4,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from Ammus import Ammus, DEFAULT_FORWARD_OFFSET, DEFAULT_SIDE_OFFSET
-import pelimusat
+from Audio import pelimusat
 
 """
 PLAYER_LUOKAT/PlayerWeapons.py
