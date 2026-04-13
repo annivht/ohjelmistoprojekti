@@ -47,6 +47,7 @@ class GameSounds:
         # KÄYTTÖ: GameStateManager.__init__() - play_music("pelimusa-root", loops=-1)
         # KUVAUS: PELIN TAUSTAMUSIIKKI JOKA SOII KOKO PELIN AJAN LOOPISSA
         "pelimusa-root": "Aanet/pelimusa-root.mp3",
+        "pedro-pedro": "Aanet/pedro-pedro.mp3",
     }
 
     # SOUND EFFECTS - KATEGORISOIDUT ÄÄNITEHOSTEET
