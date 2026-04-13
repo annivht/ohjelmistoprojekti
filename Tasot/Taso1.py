@@ -71,7 +71,7 @@ def spawn_wave_taso1(
 				ue = ultimate_enemy_cls(
 					game.enemy_imgs[8],  # 20.png
 					px, py,
-					speed=speeds.get('ultimate', 250),
+					speed=150,  # Alennettu nopeus
 					hp=2,
 					sprite_index=20,  # Ship2 configuration
 					exhaust_normal=game.ss.exhaust_normal,

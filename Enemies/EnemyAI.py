@@ -792,20 +792,23 @@ class UltimateEnemy(Enemy):
         self.rect.center = (int(self.pos.x), int(self.pos.y))
 
     def draw(self, screen: pygame.Surface, camera_x: int, camera_y: int):
-        """Draw the enemy sprite with rotation and exhaust animation."""
-        # Draw exhaust animation behind the ship
-        exhaust_list = self.exhaust_turbo if self.turbo and self.exhaust_turbo else self.exhaust_normal
-        if exhaust_list and self.exhaust_index < len(exhaust_list):
-            exhaust_frame = exhaust_list[self.exhaust_index]
-            # Place exhaust behind (offset in direction opposite to travel)
-            exhaust_angle = self.display_angle + math.pi  # 180° behind
-            exhaust_offset_dist = 20
-            exhaust_x = self.rect.centerx - camera_x + math.cos(exhaust_angle + math.pi / 2) * exhaust_offset_dist
-            exhaust_y = self.rect.centery - camera_y + math.sin(exhaust_angle + math.pi / 2) * exhaust_offset_dist
-            exhaust_rect = exhaust_frame.get_rect(center=(int(exhaust_x), int(exhaust_y)))
-            screen.blit(exhaust_frame, exhaust_rect.topleft)
+        """Draw the enemy sprite with rotation. Exhaust animation handled separately if needed."""
+        try:
+            ang = float(getattr(self, 'display_angle', 0.0))
+        except Exception:
+            ang = 0.0
         
-        # Draw main sprite with rotation
-        rotated = pygame.transform.rotate(self.image, -math.degrees(self.display_angle))
-        rotated_rect = rotated.get_rect(center=(self.rect.centerx - camera_x, self.rect.centery - camera_y))
-        screen.blit(rotated, rotated_rect.topleft)
+        deg = -math.degrees(ang)
+        try:
+            if abs(deg) > 0.0001:
+                # Rotate using rotozoom (same as parent Enemy class)
+                surf = pygame.transform.rotozoom(self.image, deg, 1.0)
+                r = surf.get_rect(center=(self.rect.centerx - camera_x, self.rect.centery - camera_y))
+                screen.blit(surf, r.topleft)
+            else:
+                # No significant rotation
+                img_r = self.image.get_rect(center=(self.rect.centerx - camera_x, self.rect.centery - camera_y))
+                screen.blit(self.image, img_r.topleft)
+        except Exception:
+            # Fallback
+            screen.blit(self.image, (self.rect.x - camera_x, self.rect.y - camera_y))
