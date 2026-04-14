@@ -1,3 +1,20 @@
+"""
+Box2D Physics World -moduuli
+============================
+Tämä moduuli tarjoaa Box2D-fysiikkamoottorille kerrosrajapinnan (adapter pattern),
+joka ylläpitää kiinteää aikaskaalausta ja synkronoi spritejen paikat fysiikkamaailmaan.
+
+Pääkomponentit:
+- CollisionCategory: Vakiot törmäysluokille (kategoriat)
+- ContactCollector: Box2D-kontaktien kerääminen ja hallinta
+- Box2DPhysicsWorld: Tärkein luokka, hallinnoi fysiikkamaailmaa ja entiteettejä
+
+Käyttö:
+    physics_world = Box2DPhysicsWorld()
+    physics_world.add_circle_body(player, radius=20)
+    physics_world.step(delta_time)
+"""
+
 import time
 from collections import deque
 
@@ -20,6 +37,11 @@ except Exception as exc:  # pragma: no cover - handled by caller
     raise RuntimeError("Box2D is required for Box2DPhysicsWorld") from exc
 
 
+# ==========================
+# LUOKAN VAKIOT - TÖRMÄYSLUOKAT
+# Määrittelee eri entiteettityyppien törmäysluokat Box2D-filtterille
+# PALAUTTAA: Bittimaskeja käytettäväksi filterData.categoryBits ja maskBits
+# ==========================
 class CollisionCategory:
     PLAYER = 0x0001
     ENEMY = 0x0002
@@ -28,22 +50,64 @@ class CollisionCategory:
     SENSOR = 0x0010
 
 
+# ==========================
+# ContactCollector LUOKKA
+# ATTRIBUUTIT: begin_contacts (int), contact_events (deque)
+# METODIT: BeginContact(), reset_frame_metrics()
+# TARKOITUS: Kerää Box2D-kontaktit kerrasta ja tallentaa kontaktin osapuolet
+# PALAUTTAA: Contact event -tiedot deque-listassa (max 64 tapahtumaa)
+# ==========================
 class ContactCollector(b2ContactListener):
+    """Kerää fysiikamaailman kontaktitapahtumat kustakin framesta."""
+    
     def __init__(self):
+        """
+        Alustaa kontaktinkeräimen.
+        
+        ATTRIBUUTIT:
+        - begin_contacts: Kuinka monta kontaktitapahtumaa tällä framella
+        - contact_events: Jonossa viimeiset 64 kontaktitapahtumaa (entity pairs)
+        """
         super().__init__()
         self.begin_contacts = 0
         self.contact_events = deque(maxlen=64)
 
     def BeginContact(self, contact):
+        """
+        Kutsutaan kun kaksi kehoa alkaa koskettaa toisiaan.
+        
+        PARAMETRIT:
+        - contact: Box2D contact-objekti, joka sisältää fixtureA ja fixtureB
+        
+        TOIMINTA:
+        - Lisää kontaktitapahtuman jonoon (userData-objekteista)
+        - Kasvattaa begin_contacts laskurin
+        
+        PALAUTTAA: Ei mitään (void)
+        """
         self.begin_contacts += 1
         a = getattr(contact.fixtureA.body, "userData", None)
         b = getattr(contact.fixtureB.body, "userData", None)
         self.contact_events.append((a, b))
 
     def reset_frame_metrics(self):
+        """
+        Nollaa kehyksen kontaktimetriikat.
+        
+        TOIMINTA: Asettaa begin_contacts nollaan seuraavalle framelle
+        
+        PALAUTTAA: Ei mitään (void)
+        """
         self.begin_contacts = 0
 
 
+# ==========================
+# Box2DPhysicsWorld LUOKKA
+# ATTRIBUUTIT: world, profile, fixed_dt, entity_to_body, step_time_ms, jne.
+# METODIT: add_circle_body(), add_static_circle(), step(), apply_explosion_impulse(), jne.
+# TARKOITUS: Hallinnoi Box2D-fysiikkamaailmaa, entiteettejä ja kiinteää aikaskaalausta
+# PALAUTTAA: Fysiikassa päivitetyt entiteettien paikat, nopeudet ja kulmat
+# ==========================
 class Box2DPhysicsWorld:
     """Small adapter that keeps Box2D in fixed-step mode and syncs sprites."""
 
@@ -58,6 +122,26 @@ class Box2DPhysicsWorld:
         max_substeps=5,
         profile_name="balanced",
     ):
+        """
+        Alustaa Box2D-fysiikkamaailman kiinteällä aikaskaalalla.
+        
+        PARAMETRIT:
+        - gravity: Painovoimavektori (x, y), oletuksena nolla
+        - fixed_dt: Kiinteä aikaskaala sekunteissa (oletuksena 1/60s)
+        - velocity_iterations: Box2D nopeusiteraatiot (korkeampi = tarkempi)
+        - position_iterations: Box2D positioiteraatiot (korkeampi = tarkempi)
+        - max_substeps: Maksimi aliaskeleita per frame
+        - profile_name: "balanced" jne. fysiikkaprofiili
+        
+        ATTRIBUUTIT (luodaan):
+        - world: Box2D World -objekti
+        - contact_collector: ContactCollector -objekti
+        - entity_to_body: Dict joka mapaa entiteetit Box2D-kappaleiksi
+        - accumulator (aikajono): Ajan keräily kiinteää aikaaskelta varten
+        - step_time_ms: Viimeksi kulunut aika millisekunteissa
+        
+        PALAUTTAA: Ei mitään (void)
+        """
         self.profile = get_physics_profile(profile_name)
         self.fixed_dt = float(fixed_dt)
         self.velocity_iterations = int(velocity_iterations)
@@ -77,10 +161,26 @@ class Box2DPhysicsWorld:
 
     @classmethod
     def pixels_to_meters(cls, value_px):
+        """
+        Muuntaa pikselit metreiksi Box2D-käyttöä varten.
+        
+        PARAMETRIT:
+        - value_px: Arvo pikseleinä
+        
+        PALAUTTAA: Arvo metreinä (value_px / 30.0)
+        """
         return float(value_px) / cls.PPM
 
     @classmethod
     def meters_to_pixels(cls, value_m):
+        """
+        Muuntaa metrit pikseleiksi ruudulla näyttöä varten.
+        
+        PARAMETRIT:
+        - value_m: Arvo metreinä
+        
+        PALAUTTAA: Arvo pikseleinä (value_m * 30.0)
+        """
         return float(value_m) * cls.PPM
 
     def add_circle_body(
@@ -95,6 +195,26 @@ class Box2DPhysicsWorld:
         restitution=0.05,
         friction=0.2,
     ):
+        """
+        Lisää dynaamisen tai kiinteän pyöreän kehon entiteetille.
+        
+        PARAMETRIT:
+        - entity: Sprite/objekti, jolle luodaan fysiikkakeho
+        - radius_px: Kehon säde pikseleinä
+        - mass: Massan tiheys (oletuksena 1.0)
+        - dynamic: True = dynaaminen keho, False = kinemaattinen (vain liike, ei voimat)
+        - bullet: True = luoti (nopeat objektit), False = normaali
+        - category: Törmäysluokka (CollisionCategory.PLAYER jne.)
+        - mask: Mihin luokkiin tämä voi törmätä (bittimaskti)
+        - restitution: Pompautuvuus (0.0 = kuollut, 1.0 = täydellinen pomppaus)
+        - friction: Kitka (0.0 = liukas, 1.0+ = kitkainen)
+        
+        LUODAAN:
+        - Box2D-fysiikkakeho, joka synkronoidaan entiteettiin step()-kutsun yhteydessä
+        - Synkronoidut attribuutit: entity.pos, entity.vel, entity.rect.center, entity.angle
+        
+        PALAUTTAA: Box2D body -objekti
+        """
         x_px, y_px = self._entity_center(entity)
         body_type = b2_dynamicBody if dynamic else b2_kinematicBody
         body = self.world.CreateBody(
@@ -128,6 +248,23 @@ class Box2DPhysicsWorld:
         restitution=0.1,
         friction=0.4,
     ):
+        """
+        Lisää staattisen (liikkumattoman) pyöreän kehon entiteetille.
+        
+        PARAMETRIT:
+        - entity: Sprite/objekti, jolle luodaan fysiikkakeho (ei liiku)
+        - radius_px: Kehon säde pikseleinä
+        - category: Törmäysluokka (oletuksena meteorit)
+        - mask: Mihin luokkiin tämä voi törmätä (bittimaskti)
+        - restitution: Pompautuvuus (oletuksena 0.1)
+        - friction: Kitka (oletuksena 0.4)
+        
+        LUODAAN:
+        - Staattinen fysiikkakeho, joka synkronoidaan entiteettiin step()-kutsun yhteydessä
+        - Objekti ei liiku nopeuteilla, sopii kiinteille esteille ja planeeteille
+        
+        PALAUTTAA: Box2D body -objekti (staattinen)
+        """
         x_px, y_px = self._entity_center(entity)
         body = self.world.CreateBody(
             type=b2_staticBody,
@@ -146,14 +283,54 @@ class Box2DPhysicsWorld:
         return body
 
     def remove_entity(self, entity):
+        """
+        Poistaa entiteetin fysiikkamaailmasta.
+        
+        PARAMETRIT:
+        - entity: Poistettava entiteetti
+        
+        TOIMINTA:
+        - Hakee entiteetin Box2D-kehon
+        - Tuhoaa kehon ja poistaa mappauksen
+        
+        PALAUTTAA: Ei mitään (void)
+        """
         body = self.entity_to_body.pop(entity, None)
         if body is not None:
             self.world.DestroyBody(body)
 
     def get_body(self, entity):
+        """
+        Hakee entiteetin Box2D-kehon.
+        
+        PARAMETRIT:
+        - entity: Entiteetti, jonka keho haetaan
+        
+        PALAUTTAA: Box2D body -objekti tai None jos ei löydy
+        """
         return self.entity_to_body.get(entity)
 
     def step(self, dt_seconds):
+        """
+        Updates fysiikkamaailman kiinteällä aikaskaalalla ja synkronoi entiteetit.
+        
+        PARAMETRIT:
+        - dt_seconds: Delta-aika sekunteissa edellisestä framesta
+        
+        TOIMINTA:
+        1. Kerää delta-ajan aikajonoon
+        2. Simuloi Box2D-aliaskeleita kiinteällä aikaskaalalla (max_substeps kappaa)
+        3. Synkronoi kaikki entiteetit fysiikasta (pos, vel, angle)
+        4. Mittaa simulaation laskentaaikaa millisekunteissa
+        
+        ATTRIBUUTIT (päivitetään):
+        - accumulator (aikajono): Jäljellä olevaa aikaa seuraavaa aliaskelta varten
+        - step_time_ms: Viimeksi kulunut simulaation aika
+        - last_substeps: Kuinka monta aliaskelta suoritettiin
+        - frame_contacts: Kontaktien lukumäärä
+        
+        PALAUTTAA: Ei mitään (void)
+        """
         dt_seconds = max(0.0, float(dt_seconds))
         self.accumulator += dt_seconds
 
@@ -176,6 +353,21 @@ class Box2DPhysicsWorld:
         self.frame_contacts = self.contact_collector.begin_contacts
 
     def apply_explosion_impulse(self, center_px, radius_px, impulse_strength):
+        """
+        Soveltaa räjähdyksestä peräisin olevaa impulssia lähelläoleviin dynaamisiin kappaleisiin.
+        
+        PARAMETRIT:
+        - center_px: Räjähdyksen keskipiste pikseleinä (tuple tai Vector2)
+        - radius_px: Räjähdyksen vaikutusala pikseleinä (falloff-säde)
+        - impulse_strength: Impulssin voimakkuus (newtonian-sekunteja)
+        
+        TOIMINTA:
+        1. Etsii kaikki dynaamiset kappaleet säteen sisällä
+        2. Laskee etäisyyteen perustuvan falloff-kertoimen (kuolleena 0-säde)
+        3. Soveltaa suuntaa säde-etäisyyteen perustuva impulssijää kuhunkin kappaleeseen
+        
+        PALAUTTAA: Ei mitään (void)
+        """
         center = pygame.Vector2(center_px)
         radius_px = max(1.0, float(radius_px))
 
@@ -202,6 +394,18 @@ class Box2DPhysicsWorld:
             )
 
     def get_metrics(self):
+        """
+        Hakee fysiikkamaailman suoritusmetriikat.
+        
+        PALAUTTAA: Dictionary:
+        {
+            'physics_step_ms': Simulaation laskentaaika millisekunteissa,
+            'substeps': Kuinka monta aliaskelta tällä framella,
+            'contacts': Kontaktien lukumäärä,
+            'profile': Nykyisen profiilin nimi,
+            'fixed_dt': Kiinteä aikaskaala (fixed delta time)
+        }
+        """
         return {
             "physics_step_ms": self.step_time_ms,
             "substeps": self.last_substeps,
@@ -210,14 +414,28 @@ class Box2DPhysicsWorld:
             "fixed_dt": self.fixed_dt,
         }
 
+    # ==========================
+    # APUMETODIT - SISÄISET METODIT
+    # ==========================
+    
     @staticmethod
     def _entity_center(entity):
-        try:
-            if hasattr(entity, "pos"):
-                p = pygame.Vector2(entity.pos)
-                return p.x, p.y
-        except Exception:
-            pass
+        """
+        Hakee entiteetin keskipisteen pikseleinä.
+        
+        PARAMETRIT:
+        - entity: Entiteetti (sprite), jonka keskipiste haetaan
+        
+        TOIMINTA:
+        1. Ensin tarkistaa entity.pos -attribuuttia
+        2. Jos ei ole, käyttää entity.rect.center -attribuuttia
+        3. Jos molemmat puuttuvat, palauttaa (0, 0)
+        
+        PALAUTTAA: Tupla (center_x, center_y) pikseleinä
+        """
+        if hasattr(entity, "pos"):
+            p = pygame.Vector2(entity.pos)
+            return p.x, p.y
 
         rect = getattr(entity, "rect", None)
         if rect is not None:
@@ -225,27 +443,30 @@ class Box2DPhysicsWorld:
         return 0.0, 0.0
 
     def _sync_entity_from_body(self, entity, body, alpha):
+        """
+        Synkronoi entiteetin attribuutit Box2D-kehon tilasta.
+        
+        PARAMETRIT:
+        - entity: Entiteetti, jota päivitetään
+        - body: Box2D body -objekti, jonka tiedoista synkronoidaan
+        - alpha: Interpolaatiokerroin (0.0-1.0) alikeskeille
+        
+        TOIMINTA:
+        1. Muuntaa body.position metreistä pikseleihin
+        2. Muuntaa body.linearVelocity metreistä/s pikseleihin/s
+        3. Asettaa entity.pos vektorin
+        4. Asettaa entity.vel nopeusvektorin
+        5. Asettaa entity.rect.center paikanvektorin
+        6. Asettaa entity.angle kulmaksi (Box2D radiaanit -> asteet)
+        
+        PALAUTTAA: Ei mitään (void)
+        """
         x_px = self.meters_to_pixels(body.position.x)
         y_px = self.meters_to_pixels(body.position.y)
         vx_px = self.meters_to_pixels(body.linearVelocity.x)
         vy_px = self.meters_to_pixels(body.linearVelocity.y)
 
-        try:
-            entity.pos = pygame.Vector2(x_px, y_px)
-        except Exception:
-            pass
-
-        try:
-            entity.vel = pygame.Vector2(vx_px, vy_px)
-        except Exception:
-            pass
-
-        try:
-            entity.rect.center = (int(x_px), int(y_px))
-        except Exception:
-            pass
-
-        try:
-            entity.angle = -float(body.angle) * 57.29577951308232
-        except Exception:
-            pass
+        entity.pos = pygame.Vector2(x_px, y_px)
+        entity.vel = pygame.Vector2(vx_px, vy_px)
+        entity.rect.center = (int(x_px), int(y_px))
+        entity.angle = -float(body.angle) * 57.29577951308232
