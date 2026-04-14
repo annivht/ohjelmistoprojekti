@@ -1,3 +1,28 @@
+"""
+================================================================================
+BOSS_ENEMY.PY - BOSSIN JA POMMIN HALLINTAJÄRJESTELMÄ
+
+SISÄLTÄÄ:
+- BossMissile: Pommi-luokka joka ammusketjussa kahdessaksi vaiheessa:
+  drop → hover → ignite → flight → explode
+  Käyttää ohjuksen lentoa, kiihtyvyyttä, vetoa ja pelaajan seurantaa.
+
+- BossEnemy: Pomo-vihollinen joka liikkuu vasemmalle-oikealle,
+  ampuu ohjusobjekteja ja hallinnoi health.
+
+RIIPPUVUUDET:
+- pygame: Pelin pääkirjasto
+- Enemies.enemy: Perusvihollnen-luokka
+- ui: Terveyspalkin piirtäminen
+- Audio.pelimusat: Äänitehosteet
+
+TOIMINNOT:
+- Pommin elinkaarenhallintta (tilat, animaatiot, lento-fysiikka)
+- Pommon ohjus-ampuminen ja cooldown
+- Pommon terveyspalkin piirtäminen
+================================================================================
+"""
+
 import pygame
 from pathlib import Path
 import random
@@ -10,6 +35,12 @@ from Audio import pelimusat
 class BossMissile(pygame.sprite.Sprite):
     """Boss missile with staged launch and car-like steering/drift."""
 
+    # ================================================================================
+    # ALUSTA POMMI-OHJUS PELIIN
+    # - Aseta kaikki fysiikan parametrit (nopeus, kiihtyvyys, veto)
+    # - Lataa animaatiofraamet
+    # - Aseta alkuperäinen tila (DROP)
+    # ================================================================================
     def __init__(self, pos, flight_frames, explode_frames, player, launch_dir=(1, 0)):
         super().__init__()
         self.pos = pygame.Vector2(pos)
@@ -62,8 +93,17 @@ class BossMissile(pygame.sprite.Sprite):
             pygame.draw.ellipse(self.image, (255, 170, 80, 230), self.image.get_rect())
         self.rect = self.image.get_rect(center=(int(self.pos.x), int(self.pos.y)))
 
+    # ================================================================================
+    # POMMIN SISÄINEN TOIMINTALOGIIKKA:
+    # - Animaatioiden päivitys
+    # - Ohjattavan lennon laskenta
+    # - Räjähdysanimaation laskenta
+    # ================================================================================
+
+    # PÄIVITÄ LENTO-ANIMAATION KEHYSTÄ AJAN MUKAAN
     def _advance_flight_anim(self, dt_ms):
         if not self.flight_frames:
+            
             return
         self.anim_timer += int(dt_ms)
         while self.anim_timer >= self.flight_anim_speed:
@@ -71,6 +111,7 @@ class BossMissile(pygame.sprite.Sprite):
             self.frame_index = (self.frame_index + 1) % len(self.flight_frames)
         self.image = self.flight_frames[self.frame_index]
 
+    # PÄIVITÄ RÄJÄHDYS-ANIMAATION KEHYSTÄ JA MERKITSE KUOLLEEKSI KUN VALMIS
     def _advance_explosion_anim(self, dt_ms):
         if not self.explode_frames:
             self.dead = True
@@ -84,6 +125,7 @@ class BossMissile(pygame.sprite.Sprite):
                 return
         self.image = self.explode_frames[self.frame_index]
 
+    # KIERRÄ OHJUS PELAAJAA KOHTI RAJOITETULLA KÄÄNTÖNOPEUDELLA
     def _rotate_towards_target(self, dt):
         if self.target is None or not hasattr(self.target, 'rect'):
             return None
@@ -105,6 +147,7 @@ class BossMissile(pygame.sprite.Sprite):
         self.heading = pygame.Vector2(math.cos(new_ang), math.sin(new_ang))
         return abs(math.degrees((desired_ang - new_ang + math.pi) % (2.0 * math.pi) - math.pi))
 
+    # INTEGROI POMMIN OHJATTU LENTO PELAAJAA KOHTI SEURANTALOGIIKOILLA
     def _integrate_guided_flight(self, dt):
         angle_error = self._rotate_towards_target(dt)
 
@@ -135,9 +178,8 @@ class BossMissile(pygame.sprite.Sprite):
             lock_speed = max(self.vel.length(), self.cruise_speed)
             self.vel = self.heading * lock_speed
 
+    # INTEGROI POMMIN LUKITTU LENTO ILMAN PELAAJAN SEURANTAA
     def _integrate_locked_flight(self, dt):
-        # Keep fixed trajectory after lock; no more target steering.
-        self.vel += self.heading * (self.thrust * 0.38) * dt
         if self.vel.length_squared() > 1e-6:
             forward_speed = self.vel.dot(self.heading)
             forward_vec = self.heading * forward_speed
@@ -148,6 +190,10 @@ class BossMissile(pygame.sprite.Sprite):
             self.vel.scale_to_length(self.cruise_speed)
         self.pos += self.vel * dt
 
+    # ================================================================================
+    # PÄIVITÄ POMMIN TILAKONE JA FYSIIKKA JOKA KEHYS
+    # TILAT: DROP → HOVER → IGNITE → FLIGHT → EXPLODE
+    # ================================================================================
     def update(self, dt_ms: int, world_rect: pygame.Rect | None = None):
         dt = max(0.0, float(dt_ms) / 1000.0)
         self.timer_ms += int(dt_ms)
@@ -211,6 +257,7 @@ class BossMissile(pygame.sprite.Sprite):
 
         self.rect = self.image.get_rect(center=(int(self.pos.x), int(self.pos.y)))
 
+    # SIIRTÄÄ POMMIN RÄJÄHTÄMIS-TILAAN JA PYSÄYTTÄÄ LIIKKEEN
     def explode(self, parent=None):
         if self.state == "explode":
             return
@@ -225,6 +272,7 @@ class BossMissile(pygame.sprite.Sprite):
         else:
             self.dead = True
 
+    # PIIRTÄÄ POMMIN NÄYTÖLLE KAMERASTA RIIPPUVALLA PAIKALLA JA KIERTOKULMAL
     def draw(self, screen: pygame.Surface, camera_x: int, camera_y: int):
         if self.state == "explode":
             rotated = pygame.transform.rotate(self.image, self.explosion_draw_angle)
@@ -242,19 +290,25 @@ class BossMissile(pygame.sprite.Sprite):
         screen.blit(rotated, r.topleft)
 
 
-# MODIFICATION NOTES:
-# 2026-03-04 - Added optional `hitbox_size` and `hitbox_offset` parameters
-# to `BossEnemy.__init__` so the collision rectangle can be tuned
-# independently of the visual sprite. This fixes cases where the visual
-# artwork is asymmetric or the sprite's pivot doesn't match the logical
-# collision center. Passing `hitbox_size=(w,h)` will resize the boss's
-# `rect` while preserving its center; `hitbox_offset=(dx,dy)` shifts the
-# rect relative to the sprite center. The code also defensively re-centers
-# the `rect` at spawn to ensure predictable placement.
+# ================================================================================
+# BOSSENEMY - POMO-VIHOLLINEN
+# ================================================================================
+# POMO LIIKKUU VASEMMALLE-OIKEALLE JA AMPUU OHJATTAVIA POMMI-OBJEKTEJA
+# - Elinkaarella: entering (tulee pelin ylhäältä) -> active (ampuu ohjuksia)
+# - Ampuu ohjuksia cooldown-perustaisesti
+# - Hallinnoi terveyttä ja antaa pisteet kuolemasta
+# ================================================================================
 
 class BossEnemy(Enemy):
     _MISSILE_CACHE = None
 
+    # ================================================================================
+    # ALUSTA POMO-VIHOLLINEN SPAWNIKOHTEEN JA PARAMETREIN
+    # - Aseta spawn-sijainti ylhäältä
+    # - Alusta terveysparametrit
+    # - Aseta liikkumisen nopeudet
+    # - Aseta alkuperäinen tila (ENTERING)
+    # ================================================================================
     def __init__(self, image: pygame.Surface, world_rect: pygame.Rect,
                  hp: int = 10, enter_speed: float = 250, move_speed: float = 300,
                  hitbox_size: tuple | None = None, hitbox_offset: tuple = (0, 0)):
@@ -304,6 +358,11 @@ class BossEnemy(Enemy):
         # Missile attack cadence.
         self._shoot_cooldown_ms = random.randint(900, 1700)
 
+    # ================================================================================
+    # LATAA POMMI-SPRITEN ANIMAATIOFRAAMET VÄLIMUISTIIN
+    # - Etsii kansioista kuvat ja skaalaa ne
+    # - Käyttää välimuistia suorituskyvyn parantamiseksi
+    # ================================================================================
     @classmethod
     def _load_missile_frames(cls):
         if cls._MISSILE_CACHE is not None:
@@ -364,6 +423,7 @@ class BossEnemy(Enemy):
         cls._MISSILE_CACHE = variants
         return variants
 
+    # AMPUU OHJUSTA COOLDOWN-PERUSTAISESTI KUN POMO ON AKTIIVINEN
     def maybe_shoot(self, dt_ms: int, containers: dict | None = None, player=None):
         if self.state != "active" or player is None or not containers:
             return
@@ -396,10 +456,15 @@ class BossEnemy(Enemy):
         )
         bullets.append(missile)
 
+    # VÄHENNÄ POMMON TERVEYTTÄ JA TARKISTA ONKO KUOLLUT
     def take_hit(self, amount=1):
         self.hp -= amount
         return self.hp <= 0
 
+    # ================================================================================
+    # PÄIVITÄ POMMON TILA JA SIJAINTI JOKA KEHYS
+    # TILAT: entering (tulee pelin ylhäältä) → active (liikkuu ja ampuu)
+    # ================================================================================
     def update(self, dt_ms, player=None, world_rect=None):
         dt = dt_ms / 1000.0
 
@@ -423,13 +488,13 @@ class BossEnemy(Enemy):
                 self.rect.right = self.world_rect.right
                 self.vx *= -1
 
+    # ================================================================================
+    # PIIRTÄÄ POMMON TERVEYSPALKIN NÄYTÖN VASEMMASSA MARGINAALISSA
+    # - Käyttää kehystettyjä palkkeja
+    # - Väri: punainen (255, 40, 40)
+    # - Stackattavissa useita pomoja päällä olevan pelin varten
+    # ================================================================================
     def draw_health_bar(self, screen: pygame.Surface, index: int = 0, margin: int = 16):
-        """Draw this boss's stacked health bar in the left margin.
-
-        - `index` selects vertical stack order (0 = top).
-        - uses `get_enemy_bar_images()` and `draw_healthbar_custom()` from `ui`.
-        """
-        try:
             # frame size + padding
             frame_w, frame_h = 340, 56
             frame_x = margin
@@ -462,5 +527,3 @@ class BossEnemy(Enemy):
                                   cur_hp, max_hp,
                                   imgs=imgs,
                                   tint=(255, 40, 40))
-        except Exception:
-            pass

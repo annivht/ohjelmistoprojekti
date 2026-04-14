@@ -138,7 +138,7 @@ class GameSounds:
     }
 
     # ============================================================================
-    # INDIVIDUAALINEN ÄÄNENVOIMAKKUUS KARTAUS
+    # YKSITTÄISET ÄÄNENVOIMAKKUUSARVOT - VOI SÄÄTÄÄ ERIKSEEN 
     # ============================================================================
     # ASETA TÄSSÄ JOKAISEN ÄÄNEN OMAT ÄÄNENVOIMAKKUUSARVOT (0.0 - 1.0)
     # ESIMERKKI: "laser_fire": 0.5 = laser puoleen voimakkuuteen

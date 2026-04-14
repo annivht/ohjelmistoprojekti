@@ -51,7 +51,7 @@ from physics_settings import load_physics_settings
 import planets
 from Audio import pelimusat
 from Valikot.MainMenu import get_current_player_name, clear_current_player_name
-from Meteor.meteor import Meteor
+from Meteor.meteor import Meteor, MainMeteorite, SmallMeteorite
 from Hazards.hazard_system import HazardSystem
 from itemSpawn import ItemSpawner
 from Tasot.Taso1 import spawn_wave_taso1
@@ -1328,11 +1328,25 @@ class Game:
                 self._meteor_hit_cooldown = max(0, meteor_hit_cooldown - self.dt)
 
             # Meteors are invulnerable in non-test levels.
-            for meteor in self.meteors:
+            for meteor in list(self.meteors):
                 for bullet in list(self.player.weapons.bullets):
                     if bullet.rect.colliderect(meteor.rect):
                         if bullet in self.player.weapons.bullets:
                             self.player.weapons.bullets.remove(bullet)
+                        
+                        # Handle meteor fragmentation if meteor has health
+                        if hasattr(meteor, 'health') and hasattr(meteor, 'get_fragments'):
+                            meteor.health -= 1
+                            if meteor.health <= 0:
+                                # Meteor destroyed - spawn fragments
+                                fragments = meteor.get_fragments()
+                                self.meteors.extend(fragments)
+                                meteor.dead = True
+                        
+                        break
+            
+            # Remove dead meteors
+            self.meteors = [m for m in self.meteors if not m.dead]
         else:
             boss_positions = [e.rect.center for e in self.enemies if isinstance(e, BossEnemy)]
             hazard_effects = self.hazard_system.update(

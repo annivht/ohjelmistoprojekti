@@ -1,116 +1,114 @@
-# Meteor System Implementation Summary - UPDATED
+# Meteoriittijärjestelmän Toteutus - PÄIVITETTY
 
-## Overview Change
-The meteor system has been updated from static obstacles to **one large moving meteor per wave** that travels linearly with random direction.
+## Muutokset
+Meteoriittijärjestelmä päivitetty kolmitasoiseksi:
+- **MainMeteorite (100%)**: Iso meteoriitti, hajoaa 4x50% meteoriiteiksi
+- **Meteor (50%)**: Keskikokoinen meteoriitti, hajoaa 2x25% pienemmäksi meteoriksi  
+- **SmallMeteorite (25%)**: Pieni meteoriitti, ei hajoa
 
-## What Was Created
+## Luodut Tiedostot
 
-### Files in the Meteor/ Folder
+### Meteor/ kansion tiedostot
 
-1. **meteor.py** - Updated Meteor class with movement
-   - Large meteor sprite (150x150 pixels)
-   - Uses `images/planeetat/slice2.png` as default
-   - Supports linear movement in cardinal directions (up/down/left/right)
-   - Bounces off screen edges
-   - Physics properties: `mass`, `collision_radius`, `vel`, `pos`
-   - Movement speed configurable (default 150 pixels/second)
-   - Indestructible (`health = infinity`)
+1. **meteor.py** - Kolme meteoriitti-luokkaa
+   - `MainMeteorite` (100% koko, Meteor_01.png)
+   - `Meteor` (50% koko, Meteor_05.png) 
+   - `SmallMeteorite` (25% koko, Meteor_10.png)
+   - Jokainen on ammuttavissa ja hajoaa osiksi
 
-2. **meteor_helpers.py** - Simplified spawning functions
-   - `spawn_moving_meteor(game, speed=150)` - Spawn one moving meteor (recommended)
-   - `spawn_meteor(game, x, y, image=None)` - Spawn at specific position with random direction
+2. **meteor_helpers.py** - Spawnaamisapu-funktiot
+   - `spawn_moving_meteor(game, speed=80, use_main=True)` - Spawnaa meteoriitti-klusterin
+   - `spawn_meteor(game, x, y, image=None, meteor_type="medium")` - Spawnaa yksittäisen meteoriitin
 
-3. **__init__.py** - Package initialization
-   - Exports Meteor class and helper functions
+3. **__init__.py** - Paketin alustus
+   - Vie kaikki kolme meteoriitti-luokkaa
 
-4. **METEOR_USAGE_UPDATED.md** - Updated usage documentation
-   - Examples of the new moving meteor system
-   - Integration guide
-   - Customization options
+## Ydinpelin Integraatio
 
-### Core Game Integration
+**Muutettu RocketGame.py:**
+- Tuonti: `from Meteor.meteor import Meteor, MainMeteorite, SmallMeteorite`
+- Meteoriitin päivitys: `meteor.update(self.dt)` pääsilmukassa
+- **Ammuksien törmäys meteoriin:**
+  - Tarkistetaan is_meteor ja health-attribuutit
+  - Vähentää health 1
+  - Kun health <= 0: kutsuu `get_fragments()` ja spawnaa pienempiä meteoreja
+- Poistetaan kuolleet meteorit (`m.dead == True`)
 
-**Modified RocketGame.py:**
-- Added `from Meteor.meteor import Meteor` import
-- Added `self.meteors = []` list to Game class
-- Clear meteors in `reset_game()`
-- **Meteor Update Loop:** `meteor.update(self.dt)` in main update loop
-- **Meteor Collision Handling:**
-  - Player vs Meteor: Deals 1 damage + knockback (420 velocity)
-  - Collision has cooldown to prevent spam damage
-  - Player animation trigger on hit
-- **Bullet vs Meteor:** Bullets destroyed on impact, meteor unaffected
-- **Enemy vs Meteor:** No interaction
-- Draw meteors after planets but before enemies
+## Meteoreiden Käyttäytyminen
 
-### Level Integration
+### MainMeteorite (100%)
+✅ Koko: ~300×300 pikseliä  
+✅ Vauriot pelaajalle: 2 HP per törmäys  
+✅ Ammuttavissa: Hajoaa 4 meteoriiteiksi (50%)  
+✅ Kuva: Meteor_01.png  
 
-**Modified Tasot/Taso1.py:**
-- Added meteor imports
-- **Wave 2:** One moving meteor at 150 pixels/second
-- **Wave 3:** One moving meteor at 180 pixels/second (faster)
+### Meteor (50%)
+✅ Koko: ~150×150 pikseliä  
+✅ Vauriot pelaajalle: 1 HP per törmäys  
+✅ Ammuttavissa: Hajoaa 2 pienemmäksi meteoriksi (25%)  
+✅ Kuva: Meteor_05.png  
 
-## Key Features
+### SmallMeteorite (25%)
+✅ Koko: ~75×75 pikseliä  
+✅ Vauriot pelaajalle: 1 HP per törmäys  
+✅ Ammuttavissa: Katoaa (ei hajoa edelleen)  
+✅ Kuva: Meteor_10.png  
 
-### Meteor Behavior
-✅ **Spawns randomly** - Appears at random screen edge (top/bottom/left/right)  
-✅ **Random direction** - Moves in random cardinal direction (left/right/up/down)  
-✅ **Bounces** - Reflects off screen edges for continuous gameplay  
-✅ **Large and visible** - 150x150 image scaled, easy to see and avoid  
-✅ **Dangerous** - 1 health damage on collision with knockback  
-✅ **Indestructible** - Bullets pass through without effect  
+## Fragmentaation Järjestys
 
-### Physics Properties
-- `vel`: Moves linearly (constant velocity)
-- `speed`: 150-250 pixels/second (configurable)
-- `mass`: 100.0 (immobile during collisions)
-- `collision_radius`: ~75 pixels
-- `bounds`: Screen dimensions for edge bouncing
+```
+MainMeteorite (100%)
+  ↓ (ammotetaan)
+  4x Meteor (50%)
+    ↓ (jokainen ammotaan)
+    2x SmallMeteorite (25%)
+      ↓ (ammotaan)
+      Katoaa
+```
 
-## How to Use in Other Levels
+## Meteoreiden Käyttö Tasoissa
 
-### Basic Example
+### Perusesimerkki
 ```python
-# In Tasot/Taso2.py or later levels
+# Tasot/Taso1.py tai muissa tasoissa
 from Meteor.meteor_helpers import spawn_moving_meteor
 
-def spawn_wave_taso2(game, wave_num, ...):
+def spawn_wave_tasox(game, wave_num, ...):
     if wave_num == 1:
-        # Add enemies first
-        
-        # Spawn one moving meteor
-        spawn_moving_meteor(game, speed=150)
+        # Spawnaa iso meteoriitti-klusteri
+        spawn_moving_meteor(game, speed=150, use_main=True)
         return True
     return False
 ```
 
-### Adjust Difficulty
+### Vaikeustaso Säätö
 ```python
-spawn_moving_meteor(game, speed=200)  # Harder - faster meteor
-spawn_moving_meteor(game, speed=100)  # Easier - slower meteor
+# Iso meteoriitti (vaikeampi)
+spawn_moving_meteor(game, speed=150, use_main=True)
+
+# Keskikokoinen meteoriitti (normaali)
+spawn_moving_meteor(game, speed=150, use_main=False)
 ```
 
-## Testing
+## Kuvat
 
-✅ Game loads without errors  
-✅ Meteors render on screen  
-✅ Movement updates work  
-✅ Collision system functional  
-✅ Wave spawning works  
+Käytetään Space-Shooter_objects setistä:
+- `images/Space-Shooter_objects/PNG/Meteors/Meteor_01.png` → MainMeteorite
+- `images/Space-Shooter_objects/PNG/Meteors/Meteor_05.png` → Meteor  
+- `images/Space-Shooter_objects/PNG/Meteors/Meteor_10.png` → SmallMeteorite
 
-## Next Steps
+## Testatut Ominaisuudet
 
-1. **Add to other levels** - Use spawn_moving_meteor() in Taso2-5
-2. **Tune speed** - Adjust speed parameter for difficulty
-3. **Add sound** - Trigger sound on meteor collision
-4. **Add visual effects** - Trail particles or rotation
-5. **Advanced patterns** - Multiple meteors or special behaviors (optional future enhancement)
+✅ Meteorit latautuvat oikein  
+✅ Fragmentaatio toimii ammuksilla  
+✅ Törmäyslogiiikka toimii  
+✅ Kokoluokat piirtyvät  
+✅ Health-järjestelmä ja hajoaminen  
 
-## Files Modified
+## Muutetut Tiedostot
 
-- `RocketGame.py` - Added meteor update loop and collision handling
-- `Tasot/Taso1.py` - Added meteor spawning to waves 2 and 3
-- `Meteor/meteor.py` - Complete rewrite with movement support
-- `Meteor/meteor_helpers.py` - Simplified to focus on spawn_moving_meteor()
-- `Meteor/__init__.py` - Updated exports
+- `RocketGame.py` - Ammuksien fragmentaatiologiikka lisätty
+- `Meteor/meteor.py` - Kolme uutta luokkaa
+- `Meteor/meteor_helpers.py` - Päivitetty spawn-funktiot
+- `Meteor/__init__.py` - Vie kaikki luokat
 
